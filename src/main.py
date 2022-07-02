@@ -15,10 +15,19 @@ def add_destination(email):
 def add_mask(mask, destination):
     url = f'{CF_ROOT_API}/zones/{CF_ZONE_ID}/email/routing/rules'
     custom_address = f'{mask}@{CUSTOM_DOMAIN}'
-    email_matcher = [{'type': 'literal', 'field': 'to', 'value': custom_address}]
-    action = [{'type': 'forward', 'value': [destination]}]
-    data = {'enable': True, 'actions': action, 'matchers': email_matcher}
-    res = requests.post(url, json=data, headers=HEADERS)
+    payload = {
+        'enable': True,
+        'actions': [{
+            'type': 'forward',
+            'value': [destination]
+        }],
+        'matchers': [{
+            'type': 'literal',
+            'field': 'to',
+            'value': custom_address
+        }]
+    }
+    res = requests.post(url, json=payload, headers=HEADERS)
     print(res.json())
 
 
