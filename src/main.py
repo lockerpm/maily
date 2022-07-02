@@ -9,6 +9,7 @@ def add_destination(email):
     url = f'{CF_ROOT_API}/accounts/{CF_ACCOUNT_ID}/email/routing/addresses'
     payload = {'email': email}
     res = requests.post(url, json=payload, headers=HEADERS)
+    print(f'Added email {email}')
     return res.json()
 
 
@@ -73,6 +74,8 @@ def delete_destination(email):
 def delete_all_destinations():
     destinations = get_destinations()
     for d in destinations:
+        if not d['email'].endswith("@trungnh.com"):
+            continue
         url = f'{CF_ROOT_API}/accounts/{CF_ACCOUNT_ID}/email/routing/addresses/{d["tag"]}'
         r = requests.delete(url, headers=HEADERS)
         print(f'Deleting destination {d["email"]}')
@@ -85,24 +88,37 @@ def get_rules():
     return r.json()['result']
 
 
+def delete_rule(tag):
+    url = f'{CF_ROOT_API}/zones/{CF_ZONE_ID}/email/routing/rules/{tag}'
+    r = requests.delete(url, headers=HEADERS)
+    return r.text
+    # return r.json()
+
+
 def delete_all_rules():
     url = f'{CF_ROOT_API}/zones/{CF_ZONE_ID}/email/routing/rules'
-    r = requests.put(url, data=None, headers=HEADERS)
-    return r.json()
+    r = requests.put(url, json=[], headers=HEADERS)
+    return r.text
 
 
 if __name__ == '__main__':
     # x = add_destination('me@trungnh.com')
     # print(x)
     # for i in range(1000):
-    #     add_destination(f'{token_hex(6)}@trungnh.com')
+    #     add_mask(token_hex(6), 'me@trungnh.com')
+    # add_destination(f'{token_hex(6)}@trungnh.com')
     # add_mask(token_hex(6), 'me@trungnh.com')
     # get_destinations()
     # x = get_destination_tag('me@trungnh.com')
     # x = delete_destination('107@trungnh.com')
     # print(x)
     # delete_all_destinations()
-    # x = get_rules()
+    # rules = get_rules()
+    # for r in rules:
+    #     print(r['tag'])
     # print(x)
     x = delete_all_rules()
     print(x)
+    #     x = delete_rule(r['tag'])
+
+    # print(x)
