@@ -1,3 +1,5 @@
+import json
+
 import requests
 from const import *
 from secrets import token_hex
@@ -77,8 +79,21 @@ def delete_all_destinations():
     return True
 
 
+def get_rules():
+    url = f'{CF_ROOT_API}/zones/{CF_ZONE_ID}/email/routing/rules'
+    r = requests.get(url, headers=HEADERS)
+    return r.json()['result']
+
+
+def delete_all_rules():
+    url = f'{CF_ROOT_API}/zones/{CF_ZONE_ID}/email/routing/rules'
+    r = requests.put(url, data=None, headers=HEADERS)
+    return r.json()
+
+
 if __name__ == '__main__':
-    # add_destination('me@trungnh.com')
+    # x = add_destination('me@trungnh.com')
+    # print(x)
     # for i in range(1000):
     #     add_destination(f'{token_hex(6)}@trungnh.com')
     # add_mask(token_hex(6), 'me@trungnh.com')
@@ -86,4 +101,8 @@ if __name__ == '__main__':
     # x = get_destination_tag('me@trungnh.com')
     # x = delete_destination('107@trungnh.com')
     # print(x)
-    delete_all_destinations()
+    # delete_all_destinations()
+    # x = get_rules()
+    # print(x)
+    x = delete_all_rules()
+    print(x)
