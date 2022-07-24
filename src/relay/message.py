@@ -8,6 +8,7 @@ from relay.utils import *
 from relay import ROOT_PATH
 from jinja2 import Template
 from relay.logger import logger
+from relay.config import RELAY_DOMAIN
 from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
@@ -43,7 +44,7 @@ class Message:
 
     @staticmethod
     def get_recipient_with_relay_domain(recipients):
-        domains_to_check = get_domains_from_settings().values()
+        domains_to_check = [RELAY_DOMAIN]
         for recipient in recipients:
             for domain in domains_to_check:
                 if domain in recipient:

@@ -3,9 +3,8 @@ from relay.logger import logger
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
-from relay.utils import get_domains_from_settings
 from email.mime.application import MIMEApplication
-from relay.config import AWS_REGION, AWS_SES_CONFIGSET
+from relay.config import AWS_REGION, AWS_SES_CONFIG_SET
 
 
 class SES:
@@ -17,10 +16,11 @@ class SES:
         return boto3.client("ses", region_name=AWS_REGION)
 
     def ses_relay_email(self, from_address, to_address, subject, message_body, attachments):
-        reply_address = "replies@%s" % get_domains_from_settings().get(
-            "RELAY_FIREFOX_DOMAIN"
-        )
-
+        # We will handle reply later
+        # reply_address = "replies@%s" % get_domains_from_settings().get(
+        #     "RELAY_DOMAIN"
+        # )
+        reply_address = None
         response = self.ses_send_raw_email(from_address, to_address, subject,
                                            message_body, attachments, reply_address)
         return response
@@ -85,7 +85,7 @@ class SES:
                 RawMessage={
                     "Data": msg_with_attachments.as_string(),
                 },
-                ConfigurationSetName=AWS_SES_CONFIGSET,
+                ConfigurationSetName=AWS_SES_CONFIG_SET,
             )
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')

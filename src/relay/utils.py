@@ -4,7 +4,7 @@ from email.headerregistry import Address
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from django.template.defaultfilters import linebreaksbr, urlize
-from relay.config import RELAY_FROM_ADDRESS, MOZMAIL_DOMAIN, RELAY_FIREFOX_DOMAIN
+from relay.config import RELAY_FROM_ADDRESS
 
 
 def get_message_id_bytes(message_id_str):
@@ -48,10 +48,3 @@ def generate_relay_from(original_from_address):
         Address(display_name.encode(maxlinelen=998), addr_spec=relay_from_address)
     )
     return formatted_from_address
-
-
-def get_domains_from_settings():
-    return {
-        "RELAY_FIREFOX_DOMAIN": RELAY_FIREFOX_DOMAIN,
-        "MOZMAIL_DOMAIN": MOZMAIL_DOMAIN,
-    }

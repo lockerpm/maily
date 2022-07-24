@@ -7,11 +7,10 @@ SUPPORTED_SNS_TYPES = [
 ]
 SLACK_WEB_HOOK = os.getenv('SLACK_WEB_HOOK')
 AWS_REGION = "us-east-1"
-RELAY_FIREFOX_DOMAIN = "relay.xoso.dev"
-MOZMAIL_DOMAIN = "xoso.dev"
+RELAY_DOMAIN = "xoso.dev"
 SITE_ORIGIN = "http://127.0.0.1:8000"
 RELAY_FROM_ADDRESS = "relay@xoso.dev"
-AWS_SES_CONFIGSET = "locker_relay"
+AWS_SES_CONFIG_SET = "locker_relay"
 
 # SNS
 AWS_SNS_KEY_CACHE = "default"
