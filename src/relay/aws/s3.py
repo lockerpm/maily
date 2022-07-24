@@ -1,9 +1,8 @@
-import boto3
+from relay.aws import AWS
 from relay.logger import logger
 from botocore.config import Config
 from relay.config import AWS_REGION
 from botocore.exceptions import ClientError
-from relay.aws import AWS
 
 
 class S3(AWS):

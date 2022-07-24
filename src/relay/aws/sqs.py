@@ -1,14 +1,12 @@
 import gc
-import json
 import time
 import shlex
-import OpenSSL
+from relay.aws import *
 from relay.config import *
 from codetiming import Timer
 from relay.logger import logger
-from botocore.exceptions import ClientError
-from relay.aws import *
 from relay.message import Message
+from botocore.exceptions import ClientError
 
 
 class SQS(AWS):
@@ -17,51 +15,40 @@ class SQS(AWS):
         self.service = 'sqs'
         self.halt_requested = False
 
-    @property
-    def client(self):
-        sqs_client = boto3.resource(self.service, region_name=AWS_REGION)
-        return sqs_client.Queue(SQS_URL)
-
     @staticmethod
     def process_message(message):
         """
         Process an SQS message, which may include sending an email.
         """
-        relay_message = Message(message)
+        parsed_message = Message(message)
         results = {"success": True, "sqs_message_id": message.message_id}
-        raw_body = message.body
-        try:
-            json_body = json.loads(raw_body)
-        except ValueError as e:
+        if parsed_message.sns_message is None:
             results.update(
                 {
                     "success": False,
-                    "error": f"Failed to load message.body: {e}",
-                    "message_body_quoted": shlex.quote(raw_body),
+                    "error": f"Failed to load message.body",
+                    "message_body_quoted": shlex.quote(message.body),
                 }
             )
             return results
-        try:
-            verified_json_body = verify_from_sns(json_body)
-        except (KeyError, OpenSSL.crypto.Error) as e:
-            logger.error(f"Failed SNS verification: {str(e)}")
+
+        if not parsed_message.verify_from_sns():
+            logger.error(f"Failed SNS verification")
             results.update(
                 {
                     "success": False,
-                    "error": f"Failed SNS verification: {e}",
+                    "error": f"Failed SNS verification",
                 }
             )
             return results
-        topic_arn = verified_json_body["TopicArn"]
-        message_type = verified_json_body["Type"]
-        error_details = validate_sns_header(topic_arn, message_type)
+        error_details = parsed_message.validate_sns_header()
         if error_details:
             results["success"] = False
             results.update(error_details)
             return results
 
         try:
-            sns_inbound_logic(message_type, verified_json_body)
+            parsed_message.sns_inbound_logic()
         except ClientError as e:
             temp_errors = ["throttling", "pause"]
             lower_error_code = e.response["Error"]["Code"].lower()
@@ -74,7 +61,7 @@ class SQS(AWS):
                 results["pause_error"] = e.response["Error"]
 
                 try:
-                    sns_inbound_logic(message_type, verified_json_body)
+                    parsed_message.sns_inbound_logic()
                     logger.info(f"[+] processed sqs message ID: {message.message_id}")
                 except ClientError as e:
                     logger.error(f"[!] sqs_client_error {e.response['Error']}")

@@ -1,44 +1,102 @@
 import os
+import pem
 import html
 import json
 import shlex
-from relay.aws.s3 import S3
-from relay.aws.ses import SES
+import base64
+import OpenSSL
 from relay.utils import *
+from OpenSSL import crypto
 from relay import ROOT_PATH
 from jinja2 import Template
+from relay.aws.s3 import S3
+from relay.aws.ses import SES
 from relay.logger import logger
-from relay.config import RELAY_DOMAIN
+from urllib.request import urlopen
 from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
+from django.utils.encoding import smart_bytes
+from relay.config import RELAY_DOMAIN, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES
+
+NOTIFICATION_HASH_FORMAT = """Message
+{Message}
+MessageId
+{MessageId}
+Subject
+{Subject}
+Timestamp
+{Timestamp}
+TopicArn
+{TopicArn}
+Type
+{Type}
+"""
+
+NOTIFICATION_WITHOUT_SUBJECT_HASH_FORMAT = """Message
+{Message}
+MessageId
+{MessageId}
+Timestamp
+{Timestamp}
+TopicArn
+{TopicArn}
+Type
+{Type}
+"""
+
+SUBSCRIPTION_HASH_FORMAT = """Message
+{Message}
+MessageId
+{MessageId}
+SubscribeURL
+{SubscribeURL}
+Timestamp
+{Timestamp}
+Token
+{Token}
+TopicArn
+{TopicArn}
+Type
+{Type}
+"""
 
 
 class Message:
-    def __init__(self, body):
-        self.body = body
-        self.msg = None
+    def __init__(self, sqs_raw):
+        self.sqs_raw = sqs_raw
 
     @property
-    def event_type(self):
-        return self.msg.get("eventType")
-
-    @property
-    def notification_type(self):
-        return self.msg.get("notificationType")
-
-    @property
-    def mail(self):
-        return self.msg.get("mail")
-
-    @property
-    def receipt(self):
-        return self.msg.get("receipt")
-
-    @property
-    def message_content(self):
+    def sns_message(self):
         try:
-            return self.msg["content"].encode("utf-8")
+            return json.loads(self.sqs_raw.body)
+        except ValueError:
+            return None
+
+    @property
+    def sns_message_type(self):
+        return self.sns_message.get("Type")
+
+    @property
+    def sns_event_type(self):
+        return self.sns_message_body.get("eventType")
+
+    @property
+    def sns_notification_type(self):
+        return self.sns_message_body.get("notificationType")
+
+    @property
+    def sns_mail(self):
+        return self.sns_message_body.get("mail")
+
+    @property
+    def sns_receipt(self):
+        return self.sns_message_body.get("receipt")
+
+    @property
+    def sns_message_content(self):
+        try:
+            return self.sns_message_body["content"].encode("utf-8")
         except (KeyError, AttributeError):
             return None
 
@@ -57,7 +115,7 @@ class Message:
 
         # First check common headers for to or cc match
         headers_to_check = "to", "cc"
-        common_headers = self.mail["commonHeaders"]
+        common_headers = self.sns_mail["commonHeaders"]
         for header in headers_to_check:
             if header in common_headers:
                 recipient = self.get_recipient_with_relay_domain(common_headers[header])
@@ -65,20 +123,20 @@ class Message:
                     return parseaddr(recipient)[1]
 
         # SES-SNS sends bcc in a different part of the message
-        recipients = self.receipt["recipients"]
+        recipients = self.sns_receipt["recipients"]
         return self.get_recipient_with_relay_domain(recipients)
 
     def get_bucket_and_key_from_s3_json(self):
         bucket = None
         object_key = None
-        if isinstance(self.receipt, dict) and "action" in self.receipt:
-            message_json_receipt = self.receipt
+        if isinstance(self.sns_receipt, dict) and "action" in self.sns_receipt:
+            message_json_receipt = self.sns_receipt
         else:
-            is_bounce_notification = self.notification_type == "Bounce" or self.event_type == "Bounce"
+            is_bounce_notification = self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce"
             if not is_bounce_notification:
                 # TODO: sns inbound notification does not have 'receipt'
                 # we need to look into this more
-                logger.error(f"[!] sns_inbound_message_without_receipt. message_json_keys: {self.msg.keys()}")
+                logger.error(f"[!] sns_inbound_message_without_receipt. message_json_keys: {self.sns_message.keys()}")
             return None, None
 
         try:
@@ -131,13 +189,13 @@ class Message:
         return text_content, html_content, attachments
 
     def get_text_html_attachments(self):
-        if self.message_content is None:
+        if self.sns_message_content is None:
             # assume email content in S3
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
             s3 = S3()
             message_content = s3.get_message_content_from_s3(bucket, object_key)
         else:
-            message_content = self.message_content
+            message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
 
         text_content, html_content, attachments = self.get_all_contents(bytes_email_message)
@@ -161,13 +219,13 @@ class Message:
         """
         return 'me@trungnh.com'
 
-    def sns_message(self):
-        if self.notification_type == "Bounce" or self.event_type == "Bounce":
+    def handle_sns_message(self):
+        if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
             return {'status_code': 400, 'message': "We don't handle bounce message"}
-        if "commonHeaders" not in self.mail:
+        if "commonHeaders" not in self.sns_mail:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
-        common_headers = self.mail["commonHeaders"]
+        common_headers = self.sns_mail["commonHeaders"]
 
         to_address = self.get_relay_recipient()
         if to_address is None:
@@ -210,27 +268,104 @@ class Message:
         response = ses.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
         return response
 
-    @property
-    def valid(self):
+    def grab_keyfile(self):
+        cert_url = self.sns_message["SigningCertURL"]
+        cert_url_origin = f"https://sns.{AWS_REGION}.amazonaws.com/"
+        if not (cert_url.startswith(cert_url_origin)):
+            return None
+
+        response = urlopen(cert_url)
+        pem_file = response.read()
+        # Extract the first certificate in the file and confirm it's a valid
+        # PEM certificate
+        certificates = pem.parse(smart_bytes(pem_file))
+
+        # A proper certificate file will contain 1 certificate
+        if len(certificates) != 1:
+            logger.error("Invalid Certificate File: URL %s", cert_url)
+            return None
+        return pem_file
+
+    def get_hash_format(self):
+        if self.sns_message_type == "Notification":
+            if "Subject" in self.sns_message.keys():
+                return NOTIFICATION_HASH_FORMAT
+            return NOTIFICATION_WITHOUT_SUBJECT_HASH_FORMAT
+        return SUBSCRIPTION_HASH_FORMAT
+
+    def verify_from_sns(self):
+        pem_file = self.grab_keyfile()
+        if pem_file is None:
+            return False
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, pem_file)
+        signature = base64.decodebytes(self.sns_message["Signature"].encode("utf-8"))
+
+        hash_format = self.get_hash_format()
         try:
-            self.msg = json.loads(self.body["Message"])
-        except json.JSONDecodeError:
-            logger.error(f'SNS notification has non-JSON message body. Content: {self.body["Message"]}')
+            crypto.verify(cert, signature, hash_format.format(**self.sns_message).encode("utf-8"), "sha1")
+        except OpenSSL.crypto.Error:
             return False
         return True
 
+    def validate_sns_header(self):
+        """
+        Validate Topic ARN and SNS Message Type.
+
+        If an error is detected, the return is a dictionary of error details.
+        If no error is detected, the return is None.
+        """
+        topic_arn = self.sns_message["TopicArn"]
+
+        if not topic_arn:
+            error = "Received SNS request without Topic ARN."
+        elif topic_arn not in AWS_SNS_TOPIC:
+            error = "Received SNS message for wrong topic."
+        elif not self.sns_message_type:
+            error = "Received SNS request without Message Type."
+        elif self.sns_message_type not in SUPPORTED_SNS_TYPES:
+            error = "Received SNS message for unsupported Type."
+        else:
+            error = None
+        if error:
+            return {
+                "error": error,
+                "received_topic_arn": shlex.quote(topic_arn),
+                "supported_topic_arn": sorted(AWS_SNS_TOPIC),
+                "received_sns_type": shlex.quote(self.sns_message_type),
+                "supported_sns_types": SUPPORTED_SNS_TYPES,
+            }
+        return None
+
+    @property
+    def sns_message_body(self):
+        try:
+            return json.loads(self.sns_message["Message"])
+        except json.JSONDecodeError:
+            logger.error(f'SNS notification has non-JSON message body. Content: {self.sns_message["Message"]}')
+            return None
+
+    def sns_inbound_logic(self):
+        if self.sns_message_type == "SubscriptionConfirmation":
+            logger.info(f'SNS SubscriptionConfirmation: {self.sns_message["SubscribeURL"]}')
+            return {'status_code': 200, 'message': 'Logged SubscribeURL'}
+        if self.sns_message_type == "Notification":
+            return self.sns_notification()
+
+        logger.error(f"SNS message type did not fall under the SNS inbound logic: {shlex.quote(self.sns_message_type)}")
+        return {'status_code': 400, 'message': 'Received SNS message with type not handled in inbound log'}
+
     def sns_notification(self):
-        if not self.valid:
+        if not self.sns_message_body:
             return {'status_code': 400, 'message': 'Received SNS notification with non-JSON body'}
 
-        if self.notification_type not in ["Received", "Bounce"] and self.event_type != "Bounce":
+        if self.sns_notification_type not in ["Received", "Bounce"] and self.sns_event_type != "Bounce":
             logger.error("SNS notification for unsupported type")
             return {
                 'status_code': 400,
                 'message': f'Received SNS notification for unsupported Type: '
-                           f'{html.escape(shlex.quote(self.notification_type))}'
+                           f'{html.escape(shlex.quote(self.sns_notification_type))}'
             }
-        response = self.sns_message()
+        response = self.handle_sns_message()
         bucket, object_key = self.get_bucket_and_key_from_s3_json()
         if response['status_code'] < 500:
             s3 = S3()
