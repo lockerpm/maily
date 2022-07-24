@@ -1,19 +1,16 @@
-import boto3
 from relay.logger import logger
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
-from relay.config import AWS_REGION, AWS_SES_CONFIG_SET
+from relay.config import AWS_SES_CONFIG_SET
+from relay.aws import AWS
 
 
-class SES:
+class SES(AWS):
     def __init__(self):
-        self.ses_client = self.create_client()
-
-    @staticmethod
-    def create_client():
-        return boto3.client("ses", region_name=AWS_REGION)
+        super().__init__()
+        self.service = 'ses'
 
     def ses_relay_email(self, from_address, to_address, subject, message_body, attachments):
         # We will handle reply later
@@ -79,7 +76,7 @@ class SES:
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
         try:
-            self.ses_client.send_raw_email(
+            self.client.send_raw_email(
                 Source=from_address,
                 Destinations=[to_address],
                 RawMessage={

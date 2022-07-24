@@ -2,8 +2,8 @@ import os
 import html
 import json
 import shlex
-from relay.s3 import S3
-from relay.ses import SES
+from relay.aws.s3 import S3
+from relay.aws.ses import SES
 from relay.utils import *
 from relay import ROOT_PATH
 from jinja2 import Template

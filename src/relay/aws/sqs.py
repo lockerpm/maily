@@ -2,26 +2,32 @@ import gc
 import json
 import time
 import shlex
-import boto3
 import OpenSSL
 from relay.config import *
 from codetiming import Timer
 from relay.logger import logger
 from botocore.exceptions import ClientError
-from relay.sns import verify_from_sns, validate_sns_header, sns_inbound_logic
+from relay.aws import *
+from relay.message import Message
 
 
-class Queue:
+class SQS(AWS):
     def __init__(self):
-        self.queue = self.create_client()
+        super().__init__()
+        self.service = 'sqs'
         self.halt_requested = False
+
+    @property
+    def client(self):
+        sqs_client = boto3.resource(self.service, region_name=AWS_REGION)
+        return sqs_client.Queue(SQS_URL)
 
     @staticmethod
     def process_message(message):
         """
         Process an SQS message, which may include sending an email.
         """
-
+        relay_message = Message(message)
         results = {"success": True, "sqs_message_id": message.message_id}
         raw_body = message.body
         try:
@@ -101,8 +107,9 @@ class Queue:
         """
         Request a batch of messages, using the long-poll method.
         """
+
         with Timer(logger=None) as poll_timer:
-            message_batch = self.queue.receive_messages(
+            message_batch = self.client.receive_messages(
                 MaxNumberOfMessages=PROCESS_EMAIL_BATCH_SIZE,
                 VisibilityTimeout=PROCESS_EMAIL_VISIBILITY_SECONDS,
                 WaitTimeSeconds=PROCESS_EMAIL_WAIT_SECONDS,
@@ -146,11 +153,3 @@ class Queue:
         logger.info(f"[+] Start listening the SQS {SQS_URL}")
         self.process_queue()
         logger.info(f"[+] Start listening the SQS {SQS_URL}")
-
-    @staticmethod
-    def create_client():
-        """
-        Create the SQS client.
-        """
-        sqs_client = boto3.resource("sqs", region_name=AWS_REGION)
-        return sqs_client.Queue(SQS_URL)
