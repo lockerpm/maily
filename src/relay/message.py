@@ -142,7 +142,8 @@ class Message:
         text_content, html_content, attachments = self.get_all_contents(bytes_email_message)
         return text_content, html_content, attachments
 
-    def wrap_html_email(self, original_html):
+    @staticmethod
+    def wrap_html_email(original_html):
         """
         Add Relay banners, surveys, etc. to an HTML email
         """
@@ -151,6 +152,13 @@ class Message:
         }
         template_path = os.path.join(ROOT_PATH, "templates", "wrapped_email.html")
         return Template(open(template_path, encoding="utf-8").read()).render(email_context)
+
+    @staticmethod
+    def get_to_address(relay_address):
+        """
+        Connect to the Locker API to get the corresponding to_address with relay_address
+        """
+        return 'me@trungnh.com'
 
     def sns_message(self):
         if self.notification_type == "Bounce" or self.event_type == "Bounce":
@@ -195,10 +203,10 @@ class Message:
             wrapped_text = relay_header_text + text_content
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
-        to_address = 'me@trungnh.com'
+        user_to_address = self.get_to_address(to_address)
         formatted_from_address = generate_relay_from(from_address)
         ses = SES()
-        response = ses.ses_relay_email(formatted_from_address, to_address, subject, message_body, attachments)
+        response = ses.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
         return response
 
     @property
