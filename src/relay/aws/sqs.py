@@ -139,4 +139,4 @@ class SQS(AWS):
         """
         logger.info(f"[+] Start listening the SQS {SQS_URL}")
         self.process_queue()
-        logger.info(f"[+] Start listening the SQS {SQS_URL}")
+        logger.info(f"[+] Stop listening the SQS {SQS_URL}")
