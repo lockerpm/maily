@@ -1,0 +1,146 @@
+{
+  "Type": "Notification",
+  "MessageId": "820930db-e5df-58fa-9803-6b83b41cd37c",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:bucket-name",
+  "Subject": "Amazon SES Email Receipt Notification",
+  "Message": {
+    "notificationType": "Received",
+    "mail": {
+      "timestamp": "2022-07-25T08:08:35.459Z",
+      "source": "zzzzzzzzz@gmail.com",
+      "messageId": "sdu123cb8u8qhc3bp12td12obatgbfgjj1ects01",
+      "destination": [
+        "zzzzz@maily.org"
+      ],
+      "headersTruncated": false,
+      "headers": [
+        {
+          "name": "Return-Path",
+          "value": "<zzzzzzzzz@gmail.com>"
+        },
+        {
+          "name": "Received",
+          "value": "from mail-lf1-f53.google.com (mail-lf1-f53.google.com [209.85.167.53]) by inbound-smtp.us-east-1.amazonaws.com with SMTP id sdu784cb8u8qhc3bp90td21obatgbfgjj9ects01 for zzzzz@maily.org; Mon, 25 Jul 2022 08:08:35 +0000 (UTC)"
+        },
+        {
+          "name": "Received-SPF",
+          "value": "pass (spfCheck: domain of _spf.google.com designates 209.85.167.53 as permitted sender) client-ip=209.85.167.53; envelope-from=zzzzzzzzz@gmail.com; helo=mail-lf1-f53.google.com;"
+        },
+        {
+          "name": "Authentication-Results",
+          "value": "amazonses.com; spf=pass (spfCheck: domain of _spf.google.com designates 209.85.167.53 as permitted sender) client-ip=209.85.167.53; envelope-from=zzzzzzzzz@gmail.com; helo=mail-lf1-f53.google.com; dkim=pass header.i=@gmail.com; dmarc=pass header.from=gmail.com;"
+        },
+        {
+          "name": "X-SES-RECEIPT",
+          "value": "AEFBQUFBQUFBQUFIVUxEcWkrUnNwVWwrejdhZUgvVUVLNzdqOFVYVlRqdm5NMUFxYVFIRWZ1R1Y3bTdtVWFLZVU0WTJkUjFzeGFDbGZleTdzZHNnRzE4NUVjTzhMdCtWdDVXLzFpc3cxWW1IdURySWRhK0NGUE1sdjN2N0FYblMvTHNVeVVUMGNlaXA3MVNaR3VqaEhiTGFCQVhxQVE1OUNEbG5kTXpKWWhhd3d0Rmx6WVdPNlVEbmFOZ1NFTkR5VU5QQ1RBOXBuK21HN0dPK0ZRTXBOSHR1bC9SNHV0dUlJTCtWMTAwVFllSVM0QytyMGh2UDVRbGUxb2RNQjBud255RXpXUkVtV0Fua0JGVE9ndTBtVlVsMVFvUUJIOUFDN3l0ODBJVlFwL1lrWDVtaFI2a3NhQnc9PQ=="
+        },
+        {
+          "name": "X-SES-DKIM-SIGNATURE",
+          "value": "a=rsa-sha256; q=dns/txt; b=WZUAL1kSW3bweRXE67WvGMXpeAFcyFArsEdtC33RIp5WkcM74fvG7cxHdPCixlvn4M5oZu5qfqPEj5KqvmZfB9HCbAQ0ymvZWU7Dkd/hTvKKNl0bb9lXjXEUzZ1RVb5ygedqoKnB+a+wv3vjcNX3DKQTZzimeAkPlFSInw+4iYc=; c=relaxed/simple; s=6gbrjpgwjskckoa6a5zn6fwqkn67xbtw; d=amazonses.com; t=1658736515; v=1; bh=70lqOu9ebjIzomlrLm0iXqe2k/gHMlS8pBYNmN9gCzE=; h=From:To:Cc:Bcc:Subject:Date:Message-ID:MIME-Version:Content-Type:X-SES-RECEIPT;"
+        },
+        {
+          "name": "Received",
+          "value": "by mail-lf1-f53.google.com with SMTP id t1so16852216lft.8 for <zzzzz@maily.org>; Mon, 25 Jul 2022 01:08:35 -0700 (PDT)"
+        },
+        {
+          "name": "DKIM-Signature",
+          "value": "v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20210112; h=mime-version:references:from:date:message-id:subject:to; bh=70lqOu9ebjIzomlrLm0iXqe2k/gHMlS8pBYNmN9gCzE=; b=OUrbw2cKTqXBUDh1VLXyKSFwTbkXji2ZgNxyeqhb6LaNHg5iYWp4lmLk5IET8Phq0ZH46h8Ts4Q3fFg4BSuh61t4j+DPic2vrNGXBkYo979QBwgupw10rPr/Qf20O6MTmZrOl8bbG4UBd6Z319p12aEeL9Ld3l1tbrFE9ReXAWUT/B06QmUnSzQm9TjG4xsKDZSGFhRDUqeKWvPM8zfVkqQ0VN9vu1RP/4jLvIOdcm4h6xlFfAaOL5DCQUdycCuyAYtzcMc17lM6NUCMDxIY1MX3QhNGxIdl9oXW8xPV/OqnqpyazL0zvUhEnMZWK5ZdfA9PshZoBjxmw80J957esQ=="
+        },
+        {
+          "name": "X-Google-DKIM-Signature",
+          "value": "v=1; a=rsa-sha256; c=relaxed/relaxed; d=1e100.net; s=20210112; h=x-gm-message-state:mime-version:references:from:date:message-id :subject:to; bh=70lqOu9ebjIzomlrLm0iXqe2k/gHMlS8pBYNmN9gCzE=; b=2Ao3o+7FAWBy6ShJWhJkM5oY4o5t8xF1nDJLzojS+akfrp8v4Cvnt2fTrijzGvPR0q wCIZw0C0e8yPp8mo75TThD4l/4wbEE9u9p6G18Mj/n4SDFFLWY+eV4q0V+PI6X0jf+0i tdgGixyEN/GxH+8aX7v6wK47rFiw8Dd5IQVgJkhP66SXwJbam6edpNVjhZy5/Un29kvg 4t2cvKVn3IMQTNPyya2XwTPKYayL37C3Yj8b7PcN9EPC0wPaTh87DYV5H4q0D18C8LFj jWc6tw1PlKONnjh/azYAYBEylbjIxUcjscegSn7MKv99YwExDWMGLOlUijcfD3OWKwlv /FdQ=="
+        },
+        {
+          "name": "X-Gm-Message-State",
+          "value": "AJIora9TzFhrPGSmVPGCmPMqOAg9bbojLpiOdmeIjeUir9NSR1V3ncSe 1Louf9UFtJzPd+02iux3TfDfm1zxi6kddvZLnUsS/dCpQfS32Q=="
+        },
+        {
+          "name": "X-Google-Smtp-Source",
+          "value": "AGRyM1swkpyoMA12y+dZlMN7Xo1F81lky0H0iXYFWPE2V+86wE5963wxrjqgq5+zjPWK0ztKNUb0CHC6ogmvgKGFjuM="
+        },
+        {
+          "name": "X-Received",
+          "value": "by 2002:a05:6512:2206:b0:48a:8796:5f0a with SMTP id h6-20020a056512220600b0048a87965f0amr2041746lfu.336.1658736513399; Mon, 25 Jul 2022 01:08:33 -0700 (PDT)"
+        },
+        {
+          "name": "MIME-Version",
+          "value": "1.0"
+        },
+        {
+          "name": "References",
+          "value": "<CAMhMKFVJJw6EOGHUwn0z-pPGFRcAjR9D0_1abhVeGhLBmti6wQ@mail.gmail.com> <CAMhMKFVoHE2UKAkc6-YMcx9niNDyKSgdNJ26hurH-Gn6_uMrVQ@mail.gmail.com> <CAMhMKFXNqdc_U57MfJd0ZeQ2zyw3q0yMqvCGKp3+kVvF38+qQA@mail.gmail.com> <CAMhMKFWyF+yjMMo=x1h4GteCTK1vd_6wH1poZrhL2B9fnGrcZA@mail.gmail.com> <CAMhMKFWJX-pLcO8j_BA7Cf6xJUN74HO0+wM8R2n4zKafRZuW=A@mail.gmail.com> <CAMhMKFV1Cg2rweTQtuLzfiftZuhij9p9ES0KqqBMw8R8wB+4rg@mail.gmail.com> <CAMhMKFU+UQR-7CYKmOW8F+AC1v9u7czRkNjihY+jMyoOHH08Rg@mail.gmail.com>"
+        },
+        {
+          "name": "From",
+          "value": "ZZZZZ <zzzzzzzzz@gmail.com>"
+        },
+        {
+          "name": "Date",
+          "value": "Mon, 25 Jul 2022 15:08:22 +0700"
+        },
+        {
+          "name": "Message-ID",
+          "value": "<CAMhMKFWRN7H-gNXUXq8H1K+ss1uyyU22=FaWusXg-v47dPkimw@mail.gmail.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Re: tesst"
+        },
+        {
+          "name": "To",
+          "value": "zzzzz@maily.org"
+        },
+        {
+          "name": "Content-Type",
+          "value": "multipart/alternative; boundary=\"000000000000a8443d05e49cb016\""
+        }
+      ],
+      "commonHeaders": {
+        "returnPath": "zzzzzzzzz@gmail.com",
+        "from": [
+          "\"ZZZZZ\" <zzzzzzzzz@gmail.com>"
+        ],
+        "date": "Mon, 25 Jul 2022 15:08:22 +0700",
+        "to": [
+          "zzzzz@maily.org"
+        ],
+        "messageId": "<CAMhMKFWRN7H-gNXUXq8H1K+ss1uyyU22=FaWusXg-v47dPkimw@mail.gmail.com>",
+        "subject": "Re: tesst"
+      }
+    },
+    "receipt": {
+      "timestamp": "2022-07-25T08:08:35.459Z",
+      "processingTimeMillis": 428,
+      "recipients": [
+        "zzzzz@maily.org"
+      ],
+      "spamVerdict": {
+        "status": "DISABLED"
+      },
+      "virusVerdict": {
+        "status": "DISABLED"
+      },
+      "spfVerdict": {
+        "status": "PASS"
+      },
+      "dkimVerdict": {
+        "status": "PASS"
+      },
+      "dmarcVerdict": {
+        "status": "PASS"
+      },
+      "action": {
+        "type": "S3",
+        "topicArn": "arn:aws:sns:us-east-1:123456789012:bucket-name",
+        "bucketName": "bucket-name",
+        "objectKeyPrefix": "emails",
+        "objectKey": "emails/sdu784cb8u8qhc3bp90td21obatgbfgjj9ects01"
+      }
+    }
+  },
+  "Timestamp": "2022-07-25T08:08:35.896Z",
+  "SignatureVersion": "1",
+  "Signature": "Yc39T9glYaz0kLMFEhh22Y7NYYbkDfJ9xyHrOifjuJSelz/Lpm6VdXqrjf2fFDbWIXiiSbqcOVFz94u5qXMG9sssECW4UYuNy5jDp1fN1QTNER6JDciyHhXAGDxfSeLkCe7ZQDmnx5c2NhvKp7Yg37Zq1Ka75HbZ0x16AWRK9Yopey+/CipgN3oCpWDGjMwRhephoZn+qFAN2JW7wI/H8QK8KufizK/HqabTqB6HtrNvcSwYobUfXdoWXdWBo1O5tQEfsV+cdz3pO4orVzxT/BMoGEm/TBdQu/Org4QEYkyRZnxrKoRtuytnpGrYgFc/YQvWfIsy5GrEHB0xLavBhQ==",
+  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-6ff5311234ec834fbaddaa2a964abfda.pem",
+  "UnsubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:123456789012:bucket-name:9e7b054b-373a-4821-8c53-0cfec895f4a3"
+}

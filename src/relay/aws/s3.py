@@ -34,3 +34,6 @@ class S3(AWS):
             else:
                 logger.error("s3_client_error_delete_email: " + e.response["Error"])
         return False
+
+
+s3_client = S3()

@@ -32,20 +32,22 @@ class SQS(AWS):
             )
             return results
 
-        if not parsed_message.verify_from_sns():
-            logger.error(f"Failed SNS verification")
-            results.update(
-                {
-                    "success": False,
-                    "error": f"Failed SNS verification",
-                }
-            )
-            return results
-        error_details = parsed_message.validate_sns_header()
-        if error_details:
-            results["success"] = False
-            results.update(error_details)
-            return results
+        # We temporarily disable sns verification to improve the performance
+        # if not parsed_message.verify_from_sns():
+        #     logger.error(f"Failed SNS verification")
+        #     results.update(
+        #         {
+        #             "success": False,
+        #             "error": f"Failed SNS verification",
+        #         }
+        #     )
+        #     return results
+
+        # error_details = parsed_message.validate_sns_header()
+        # if error_details:
+        #     results["success"] = False
+        #     results.update(error_details)
+        #     return results
 
         try:
             parsed_message.sns_inbound_logic()
@@ -140,3 +142,6 @@ class SQS(AWS):
         logger.info(f"[+] Start listening the SQS {SQS_URL}")
         self.process_queue()
         logger.info(f"[+] Stop listening the SQS {SQS_URL}")
+
+
+sqs_client = SQS()

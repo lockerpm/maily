@@ -1,5 +1,4 @@
-from relay.aws.sqs import SQS
+from relay.aws.sqs import sqs_client
 
 if __name__ == '__main__':
-    sqs = SQS()
-    sqs.handle()
+    sqs_client.handle()
