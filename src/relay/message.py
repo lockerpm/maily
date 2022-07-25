@@ -5,6 +5,7 @@ import json
 import shlex
 import base64
 import OpenSSL
+import requests
 from relay.utils import *
 from OpenSSL import crypto
 from relay import ROOT_PATH
@@ -17,7 +18,7 @@ from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.config import RELAY_DOMAIN, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES
+from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, LOCKER_API_RELAY_DESTINATION
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -102,9 +103,8 @@ class Message:
 
     @staticmethod
     def get_recipient_with_relay_domain(recipients):
-        domains_to_check = [RELAY_DOMAIN]
         for recipient in recipients:
-            for domain in domains_to_check:
+            for domain in RELAY_DOMAINS:
                 if domain in recipient:
                     return recipient
         return None
@@ -217,7 +217,11 @@ class Message:
         """
         Connect to the Locker API to get the corresponding to_address with relay_address
         """
-        return 'me@trungnh.com'
+        try:
+            r = requests.get(LOCKER_API_RELAY_DESTINATION + relay_address).json()
+            return r['destination']
+        except (requests.exceptions.ConnectionError, KeyError):
+            return None
 
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
@@ -225,12 +229,15 @@ class Message:
         if "commonHeaders" not in self.sns_mail:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
-        common_headers = self.sns_mail["commonHeaders"]
 
         to_address = self.get_relay_recipient()
         if to_address is None:
             return {'status_code': 400, 'message': "Address does not exist"}
+        user_to_address = self.get_to_address(to_address)
+        if user_to_address is None:
+            return {'status_code': 400, 'message': "Destination does not exist"}
 
+        common_headers = self.sns_mail["commonHeaders"]
         from_address = parseaddr(common_headers["from"][0])[1]
         subject = common_headers.get("subject", "")
 
@@ -262,7 +269,6 @@ class Message:
             wrapped_text = relay_header_text + text_content
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
-        user_to_address = self.get_to_address(to_address)
         formatted_from_address = generate_relay_from(from_address)
         ses = SES()
         response = ses.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)

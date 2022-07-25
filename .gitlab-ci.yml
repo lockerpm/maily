@@ -1,0 +1,23 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - cystack-deployer
+  tags:
+    - cs_bot
+  only:
+    - main
+    - tags
+
+deploy:
+  stage: deploy
+  script:
+    - cystack-deployer
+  tags:
+    - cs_bot
+  only:
+    - main
+    - tags
