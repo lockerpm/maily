@@ -88,3 +88,6 @@ class SES(AWS):
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
             return {'status_code': 503, 'message': "SES client error on Raw Email"}
         return {'status_code': 200, 'message': "Sent email to final recipient"}
+
+
+ses_client = SES()

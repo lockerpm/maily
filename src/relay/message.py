@@ -10,8 +10,8 @@ from relay.utils import *
 from OpenSSL import crypto
 from relay import ROOT_PATH
 from jinja2 import Template
-from relay.aws.s3 import S3
-from relay.aws.ses import SES
+from relay.aws.s3 import s3_client
+from relay.aws.ses import ses_client
 from relay.logger import logger
 from urllib.request import urlopen
 from tempfile import SpooledTemporaryFile
@@ -75,6 +75,14 @@ class Message:
             return None
 
     @property
+    def sns_message_body(self):
+        try:
+            return json.loads(self.sns_message["Message"])
+        except json.JSONDecodeError:
+            logger.error(f'SNS notification has non-JSON message body. Content: {self.sns_message["Message"]}')
+            return None
+
+    @property
     def sns_message_type(self):
         return self.sns_message.get("Type")
 
@@ -89,6 +97,10 @@ class Message:
     @property
     def sns_mail(self):
         return self.sns_message_body.get("mail")
+
+    @property
+    def mail_common_headers(self):
+        return self.sns_mail.get("commonHeaders")
 
     @property
     def sns_receipt(self):
@@ -115,10 +127,9 @@ class Message:
 
         # First check common headers for to or cc match
         headers_to_check = "to", "cc"
-        common_headers = self.sns_mail["commonHeaders"]
         for header in headers_to_check:
-            if header in common_headers:
-                recipient = self.get_recipient_with_relay_domain(common_headers[header])
+            if header in self.mail_common_headers:
+                recipient = self.get_recipient_with_relay_domain(self.mail_common_headers[header])
                 if recipient is not None:
                     return parseaddr(recipient)[1]
 
@@ -192,8 +203,7 @@ class Message:
         if self.sns_message_content is None:
             # assume email content in S3
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
-            s3 = S3()
-            message_content = s3.get_message_content_from_s3(bucket, object_key)
+            message_content = s3_client.get_message_content_from_s3(bucket, object_key)
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
@@ -226,7 +236,7 @@ class Message:
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
             return {'status_code': 400, 'message': "We don't handle bounce message"}
-        if "commonHeaders" not in self.sns_mail:
+        if self.mail_common_headers is None:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
 
@@ -237,9 +247,8 @@ class Message:
         if user_to_address is None:
             return {'status_code': 400, 'message': "Destination does not exist"}
 
-        common_headers = self.sns_mail["commonHeaders"]
-        from_address = parseaddr(common_headers["from"][0])[1]
-        subject = common_headers.get("subject", "")
+        from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        subject = self.mail_common_headers.get("subject", "")
 
         try:
             text_content, html_content, attachments = self.get_text_html_attachments()
@@ -270,9 +279,7 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
         formatted_from_address = generate_relay_from(from_address)
-        ses = SES()
-        response = ses.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
-        return response
+        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]
@@ -342,14 +349,6 @@ class Message:
             }
         return None
 
-    @property
-    def sns_message_body(self):
-        try:
-            return json.loads(self.sns_message["Message"])
-        except json.JSONDecodeError:
-            logger.error(f'SNS notification has non-JSON message body. Content: {self.sns_message["Message"]}')
-            return None
-
     def sns_inbound_logic(self):
         if self.sns_message_type == "SubscriptionConfirmation":
             logger.info(f'SNS SubscriptionConfirmation: {self.sns_message["SubscribeURL"]}')
@@ -374,6 +373,5 @@ class Message:
         response = self.handle_sns_message()
         bucket, object_key = self.get_bucket_and_key_from_s3_json()
         if response['status_code'] < 500:
-            s3 = S3()
-            s3.remove_message_from_s3(bucket, object_key)
+            s3_client.remove_message_from_s3(bucket, object_key)
         return response
