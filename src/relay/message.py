@@ -223,6 +223,10 @@ class Message:
         return Template(open(template_path, encoding="utf-8").read()).render(email_context)
 
     @staticmethod
+    def get_verdict(receipt, verdict_type):
+        return receipt["%sVerdict" % verdict_type]["status"]
+
+    @staticmethod
     def get_to_address(relay_address):
         """
         Connect to the Locker API to get the corresponding to_address with relay_address
@@ -246,6 +250,11 @@ class Message:
         user_to_address = self.get_to_address(to_address)
         if user_to_address is None:
             return {'status_code': 400, 'message': "Destination does not exist"}
+
+        if self.get_verdict(self.sns_receipt, "dmarc") == "FAIL":
+            dmarc_policy = self.sns_receipt.get("dmarcPolicy", "none")
+            if dmarc_policy == "reject":
+                return {'status_code': 400, 'message': "DMARC failure, policy is reject"}
 
         from_address = parseaddr(self.mail_common_headers["from"][0])[1]
         subject = self.mail_common_headers.get("subject", "")

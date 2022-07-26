@@ -22,6 +22,7 @@ class SQS(AWS):
         """
         parsed_message = Message(message)
         results = {"success": True, "sqs_message_id": message.message_id}
+        details = None
         if parsed_message.sns_message is None:
             results.update(
                 {
@@ -50,7 +51,7 @@ class SQS(AWS):
         #     return results
 
         try:
-            parsed_message.sns_inbound_logic()
+            details = parsed_message.sns_inbound_logic()
         except ClientError as e:
             temp_errors = ["throttling", "pause"]
             lower_error_code = e.response["Error"]["Code"].lower()
@@ -63,7 +64,7 @@ class SQS(AWS):
                 results["pause_error"] = e.response["Error"]
 
                 try:
-                    parsed_message.sns_inbound_logic()
+                    details = parsed_message.sns_inbound_logic()
                     logger.info(f"[+] processed sqs message ID: {message.message_id}")
                 except ClientError as e:
                     logger.error(f"[!] sqs_client_error {e.response['Error']}")
@@ -90,6 +91,11 @@ class SQS(AWS):
                     "error": str(e)
                 }
             )
+        results['details'] = details
+        if details['status_code'] != 200:
+            results['details']['sent_success'] = False
+        else:
+            results['details']['sent_success'] = True
         return results
 
     def poll_queue_for_messages(self):
