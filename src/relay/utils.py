@@ -1,3 +1,4 @@
+import base64
 from email.header import Header
 from email.utils import parseaddr
 from email.headerregistry import Address
@@ -12,8 +13,12 @@ def get_message_id_bytes(message_id_str):
     return message_id.encode()
 
 
+def b64_lookup_key(lookup_key):
+    return base64.urlsafe_b64encode(lookup_key).decode("ascii")
+
+
 def derive_reply_keys(message_id):
-    """Derive the lookup key and encrytion key from an aliased message id."""
+    """Derive the lookup key and encryption key from an aliased message id."""
     algorithm = hashes.SHA256()
     hkdf = HKDFExpand(algorithm=algorithm, length=16, info=b"replay replies lookup key")
     lookup_key = hkdf.derive(message_id)

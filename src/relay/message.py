@@ -18,7 +18,8 @@ from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, LOCKER_API_RELAY_DESTINATION
+from relay.locker_api import get_reply_record_from_lookup_key, get_to_address
+from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -61,6 +62,11 @@ TopicArn
 Type
 {Type}
 """
+
+
+class InReplyToNotFound(Exception):
+    def __init__(self, message="No In-Reply-To header."):
+        self.message = message
 
 
 class Message:
@@ -120,6 +126,109 @@ class Message:
                 if domain in recipient:
                     return recipient
         return None
+
+    def get_keys_from_headers(self):
+        in_reply_to = None
+        for header in self.sns_mail["headers"]:
+            if header["name"].lower() == "in-reply-to":
+                in_reply_to = header["value"]
+                message_id_bytes = get_message_id_bytes(in_reply_to)
+                return derive_reply_keys(message_id_bytes)
+        if in_reply_to is None:
+            raise InReplyToNotFound
+
+    @staticmethod
+    def strip_local_part_tag(address):
+        [local_part, domain] = address.split("@")
+        sub_address_parts = local_part.split("+")
+        return f"{sub_address_parts[0]}@{domain}"
+
+    def _reply_allowed(self, from_address, to_address, reply_record):
+        stripped_from_address = self.strip_local_part_tag(from_address)
+        reply_record_email = reply_record['user_email']
+        stripped_reply_record_address = self.strip_local_part_tag(reply_record_email)
+        if (from_address == reply_record_email) or (stripped_from_address == stripped_reply_record_address):
+            # This is a Relay user replying to an external sender;
+            # verify they are premium
+            if reply_record['owner_has_premium']:
+                # TODO: send the user an email
+                # that replies are a premium feature
+                return True
+            return False
+        else:
+            # The From: is not a Relay user, so make sure this is a reply *TO* a
+            # premium Relay user
+            try:
+                [to_local_portion, to_domain_portion] = to_address.split("@")
+                address = _get_address(to_address, to_local_portion, to_domain_portion)
+                user_profile = address.user.profile_set.first()
+                if user_profile.has_premium:
+                    return True
+            except (ObjectDoesNotExist):
+                return False
+        incr_if_enabled("free_user_reply_attempt", 1)
+        return False
+
+    def handle_reply(self, from_address, message_json, to_address):
+        try:
+            lookup_key, encryption_key = self.get_keys_from_headers()
+        except InReplyToNotFound:
+            return {'status_code': 400, 'message': "No In-Reply-To header"}
+
+        reply_record = get_reply_record_from_lookup_key(lookup_key)
+        if reply_record is None:
+            return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header"}
+
+        address = reply_record['address']
+
+        if not _reply_allowed(from_address, to_address, reply_record):
+            return HttpResponse("Relay replies require a premium account", status=403)
+
+        outbound_from_address = address.full_address
+        decrypted_metadata = json.loads(
+            decrypt_reply_metadata(encryption_key, reply_record.encrypted_metadata)
+        )
+        incr_if_enabled("reply_email", 1)
+        subject = self.mail_common_headers.get("subject", "")
+        to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
+
+        try:
+            text_content, html_content, attachments = _get_text_html_attachments(
+                message_json
+            )
+        except ClientError as e:
+            if e.response["Error"].get("Code", "") == "NoSuchKey":
+                logger.error("s3_object_does_not_exist", extra=e.response["Error"])
+                return HttpResponse("Email not in S3", status=404)
+            logger.error("s3_client_error_get_email", extra=e.response["Error"])
+            # we are returning a 500 so that SNS can retry the email processing
+            return HttpResponse("Cannot fetch the message content from S3", status=503)
+
+        message_body = {}
+        if html_content:
+            message_body["Html"] = {"Charset": "UTF-8", "Data": html_content}
+
+        if text_content:
+            message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
+
+        try:
+            response = ses_send_raw_email(
+                outbound_from_address,
+                to_address,
+                subject,
+                message_body,
+                attachments,
+                outbound_from_address,
+                mail,
+                address,
+            )
+            reply_record.increment_num_replied()
+            profile = address.user.profile_set.first()
+            profile.update_abuse_metric(replied=True)
+            return response
+        except ClientError as e:
+            logger.error("ses_client_error", extra=e.response["Error"])
+            return HttpResponse("SES client error", status=400)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -226,17 +335,6 @@ class Message:
     def get_verdict(receipt, verdict_type):
         return receipt["%sVerdict" % verdict_type]["status"]
 
-    @staticmethod
-    def get_to_address(relay_address):
-        """
-        Connect to the Locker API to get the corresponding to_address with relay_address
-        """
-        try:
-            r = requests.get(LOCKER_API_RELAY_DESTINATION + relay_address).json()
-            return r['destination']
-        except (requests.exceptions.ConnectionError, KeyError):
-            return None
-
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
             return {'status_code': 400, 'message': "We don't handle bounce message"}
@@ -247,7 +345,7 @@ class Message:
         to_address = self.get_relay_recipient()
         if to_address is None:
             return {'status_code': 400, 'message': "Address does not exist"}
-        user_to_address = self.get_to_address(to_address)
+        user_to_address = get_to_address(to_address)
         if user_to_address is None:
             return {'status_code': 400, 'message': "Destination does not exist"}
 
