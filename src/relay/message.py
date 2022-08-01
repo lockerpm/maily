@@ -143,7 +143,39 @@ class Message:
         sub_address_parts = local_part.split("+")
         return f"{sub_address_parts[0]}@{domain}"
 
+    def get_address(self, to_address, local_portion, domain_portion):
+        # if the domain is not the site's 'top' relay domain,
+        # it may be for a user's subdomain
+        if domain_portion not in RELAY_DOMAINS:
+            return _get_domain_address(local_portion, domain_portion)
+
+        # the domain is the site's 'top' relay domain, so look up the RelayAddress
+        try:
+            domain_numerical = get_domain_numerical(domain_portion)
+            relay_address = RelayAddress.objects.get(
+                address=local_portion, domain=domain_numerical
+            )
+            return relay_address
+        except RelayAddress.DoesNotExist as e:
+            try:
+                DeletedAddress.objects.get(
+                    address_hash=address_hash(local_portion, domain=domain_portion)
+                )
+                incr_if_enabled("email_for_deleted_address", 1)
+                # TODO: create a hard bounce receipt rule in SES
+            except DeletedAddress.DoesNotExist:
+                incr_if_enabled("email_for_unknown_address", 1)
+            except DeletedAddress.MultipleObjectsReturned:
+                # not sure why this happens on stage but let's handle it
+                incr_if_enabled("email_for_deleted_address_multiple", 1)
+            raise e
+
     def _reply_allowed(self, from_address, to_address, reply_record):
+        """
+        We allow the user to reply an email if:
+            - this user is a premium user, or
+            - this user is replying to a premium user
+        """
         stripped_from_address = self.strip_local_part_tag(from_address)
         reply_record_email = reply_record['user_email']
         stripped_reply_record_address = self.strip_local_part_tag(reply_record_email)
@@ -386,7 +418,8 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
         formatted_from_address = generate_relay_from(from_address)
-        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
+        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments,
+                                          self.sns_mail)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]

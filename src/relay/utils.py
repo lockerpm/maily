@@ -1,4 +1,7 @@
+import json
 import base64
+import jwcrypto.jwe
+import jwcrypto.jwk
 from email.header import Header
 from email.utils import parseaddr
 from email.headerregistry import Address
@@ -53,3 +56,27 @@ def generate_relay_from(original_from_address):
         Address(display_name.encode(maxlinelen=998), addr_spec=relay_from_address)
     )
     return formatted_from_address
+
+
+def encrypt_reply_metadata(key, payload):
+    """Encrypt the given payload into a JWE, using the given key."""
+    # This is a bit dumb, we have to base64-encode the key in order to load it :-/
+    k = jwcrypto.jwk.JWK(
+        kty="oct", k=base64.urlsafe_b64encode(key).rstrip(b"=").decode("ascii")
+    )
+    e = jwcrypto.jwe.JWE(
+        json.dumps(payload), json.dumps({"alg": "dir", "enc": "A256GCM"}), recipient=k
+    )
+    return e.serialize(compact=True)
+
+
+def decrypt_reply_metadata(key, jwe):
+    """Decrypt the given JWE into a json payload, using the given key."""
+    # This is a bit dumb, we have to base64-encode the key in order to load it :-/
+    k = jwcrypto.jwk.JWK(
+        kty="oct", k=base64.urlsafe_b64encode(key).rstrip(b"=").decode("ascii")
+    )
+    e = jwcrypto.jwe.JWE()
+    e.deserialize(jwe)
+    e.decrypt(k)
+    return e.plaintext
