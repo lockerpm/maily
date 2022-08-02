@@ -18,8 +18,8 @@ from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.locker_api import get_reply_record_from_lookup_key, get_to_address
-from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES
+from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
+from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -137,71 +137,7 @@ class Message:
         if in_reply_to is None:
             raise InReplyToNotFound
 
-    @staticmethod
-    def strip_local_part_tag(address):
-        [local_part, domain] = address.split("@")
-        sub_address_parts = local_part.split("+")
-        return f"{sub_address_parts[0]}@{domain}"
-
-    def get_address(self, to_address, local_portion, domain_portion):
-        # if the domain is not the site's 'top' relay domain,
-        # it may be for a user's subdomain
-        if domain_portion not in RELAY_DOMAINS:
-            return _get_domain_address(local_portion, domain_portion)
-
-        # the domain is the site's 'top' relay domain, so look up the RelayAddress
-        try:
-            domain_numerical = get_domain_numerical(domain_portion)
-            relay_address = RelayAddress.objects.get(
-                address=local_portion, domain=domain_numerical
-            )
-            return relay_address
-        except RelayAddress.DoesNotExist as e:
-            try:
-                DeletedAddress.objects.get(
-                    address_hash=address_hash(local_portion, domain=domain_portion)
-                )
-                incr_if_enabled("email_for_deleted_address", 1)
-                # TODO: create a hard bounce receipt rule in SES
-            except DeletedAddress.DoesNotExist:
-                incr_if_enabled("email_for_unknown_address", 1)
-            except DeletedAddress.MultipleObjectsReturned:
-                # not sure why this happens on stage but let's handle it
-                incr_if_enabled("email_for_deleted_address_multiple", 1)
-            raise e
-
-    def _reply_allowed(self, from_address, to_address, reply_record):
-        """
-        We allow the user to reply an email if:
-            - this user is a premium user, or
-            - this user is replying to a premium user
-        """
-        stripped_from_address = self.strip_local_part_tag(from_address)
-        reply_record_email = reply_record['user_email']
-        stripped_reply_record_address = self.strip_local_part_tag(reply_record_email)
-        if (from_address == reply_record_email) or (stripped_from_address == stripped_reply_record_address):
-            # This is a Relay user replying to an external sender;
-            # verify they are premium
-            if reply_record['owner_has_premium']:
-                # TODO: send the user an email
-                # that replies are a premium feature
-                return True
-            return False
-        else:
-            # The From: is not a Relay user, so make sure this is a reply *TO* a
-            # premium Relay user
-            try:
-                [to_local_portion, to_domain_portion] = to_address.split("@")
-                address = _get_address(to_address, to_local_portion, to_domain_portion)
-                user_profile = address.user.profile_set.first()
-                if user_profile.has_premium:
-                    return True
-            except (ObjectDoesNotExist):
-                return False
-        incr_if_enabled("free_user_reply_attempt", 1)
-        return False
-
-    def handle_reply(self, from_address, message_json, to_address):
+    def handle_reply(self, from_address):
         try:
             lookup_key, encryption_key = self.get_keys_from_headers()
         except InReplyToNotFound:
@@ -211,30 +147,21 @@ class Message:
         if reply_record is None:
             return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header"}
 
-        address = reply_record['address']
-
-        if not _reply_allowed(from_address, to_address, reply_record):
-            return HttpResponse("Relay replies require a premium account", status=403)
-
-        outbound_from_address = address.full_address
-        decrypted_metadata = json.loads(
-            decrypt_reply_metadata(encryption_key, reply_record.encrypted_metadata)
-        )
-        incr_if_enabled("reply_email", 1)
+        decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
         to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
-
+        outbound_from_address = decrypted_metadata.get("to")
+        if not reply_allowed(from_address, to_address):
+            return {'status_code': 403, 'message': "Relay replies require a premium account"}
         try:
-            text_content, html_content, attachments = _get_text_html_attachments(
-                message_json
-            )
+            text_content, html_content, attachments = self.get_text_html_attachments()
         except ClientError as e:
             if e.response["Error"].get("Code", "") == "NoSuchKey":
-                logger.error("s3_object_does_not_exist", extra=e.response["Error"])
-                return HttpResponse("Email not in S3", status=404)
-            logger.error("s3_client_error_get_email", extra=e.response["Error"])
+                logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
+                return {'status_code': 404, 'message': "Email not in S3"}
+            logger.error('s3_client_error_get_email: {e.response["Error"]}')
             # we are returning a 500 so that SNS can retry the email processing
-            return HttpResponse("Cannot fetch the message content from S3", status=503)
+            return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
 
         message_body = {}
         if html_content:
@@ -243,24 +170,8 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        try:
-            response = ses_send_raw_email(
-                outbound_from_address,
-                to_address,
-                subject,
-                message_body,
-                attachments,
-                outbound_from_address,
-                mail,
-                address,
-            )
-            reply_record.increment_num_replied()
-            profile = address.user.profile_set.first()
-            profile.update_abuse_metric(replied=True)
-            return response
-        except ClientError as e:
-            logger.error("ses_client_error", extra=e.response["Error"])
-            return HttpResponse("SES client error", status=400)
+        return ses_client.ses_relay_email(outbound_from_address, to_address, subject, message_body, attachments,
+                                          self.sns_mail)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -370,23 +281,27 @@ class Message:
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
             return {'status_code': 400, 'message': "We don't handle bounce message"}
+
         if self.mail_common_headers is None:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
-
-        to_address = self.get_relay_recipient()
-        if to_address is None:
-            return {'status_code': 400, 'message': "Address does not exist"}
-        user_to_address = get_to_address(to_address)
-        if user_to_address is None:
-            return {'status_code': 400, 'message': "Destination does not exist"}
 
         if self.get_verdict(self.sns_receipt, "dmarc") == "FAIL":
             dmarc_policy = self.sns_receipt.get("dmarcPolicy", "none")
             if dmarc_policy == "reject":
                 return {'status_code': 400, 'message': "DMARC failure, policy is reject"}
 
+        to_address = self.get_relay_recipient()
+        if to_address is None:
+            return {'status_code': 400, 'message': "Address does not exist"}
+
         from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        if to_address == REPLY_EMAIL:
+            self.handle_reply(from_address)
+
+        user_to_address = get_to_address(to_address)
+        if user_to_address is None:
+            return {'status_code': 400, 'message': "Destination does not exist"}
         subject = self.mail_common_headers.get("subject", "")
 
         try:

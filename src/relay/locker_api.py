@@ -26,7 +26,7 @@ def store_reply_record(mail, ses_response):
     # After relaying email, store a Reply record for it
     reply_metadata = {}
     for header in mail["headers"]:
-        if header["name"].lower() in ["message-id", "from", "reply-to"]:
+        if header["name"].lower() in ["message-id", "from", "reply-to", "to"]:
             reply_metadata[header["name"].lower()] = header["value"]
     message_id_bytes = get_message_id_bytes(ses_response["MessageId"])
     lookup_key, encryption_key = derive_reply_keys(message_id_bytes)
@@ -37,3 +37,15 @@ def store_reply_record(mail, ses_response):
     # TODO
     # Request to API to store payload
     return mail
+
+
+def reply_allowed(from_address, to_address):
+    """
+    We allow the user to reply an email if:
+        - this user is a premium user, or
+        - this user is replying to a premium user
+    """
+
+    # TODO
+    # send request to API to check whether from_address or to_address is premium
+    return True
