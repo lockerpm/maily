@@ -150,6 +150,8 @@ class Message:
         decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
         to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
+        to_address = extract_email_from_string(to_address)
+
         outbound_from_address = decrypted_metadata.get("to")
         if not reply_allowed(from_address, to_address):
             return {'status_code': 403, 'message': "Relay replies require a premium account"}
@@ -170,8 +172,8 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        return ses_client.ses_relay_email(outbound_from_address, to_address, subject, message_body, attachments,
-                                          self.sns_mail)
+        return ses_client.ses_send_raw_email(outbound_from_address, to_address, subject, message_body, attachments,
+                                             outbound_from_address, self.sns_mail)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -297,7 +299,7 @@ class Message:
 
         from_address = parseaddr(self.mail_common_headers["from"][0])[1]
         if to_address == REPLY_EMAIL:
-            self.handle_reply(from_address)
+            return self.handle_reply(from_address)
 
         user_to_address = get_to_address(to_address)
         if user_to_address is None:

@@ -1,3 +1,4 @@
+import re
 import json
 import base64
 import jwcrypto.jwe
@@ -43,7 +44,7 @@ def generate_relay_from(original_from_address):
     # Encoding display names to longer than 998 chars will add wrap
     # characters which are unsafe. (See https://bugs.python.org/issue39073)
     # So, truncate the original sender to 900 chars so we can add our
-    # "[via Relay] <relayfrom>" and encode it all.
+    # "[via Relay] <relay_from>" and encode it all.
     if len(original_from_address) > 998:
         original_from_address = "%s ..." % original_from_address[:900]
     # line breaks in From: will encode to unsafe chars, so strip them.
@@ -80,3 +81,8 @@ def decrypt_reply_metadata(key, jwe):
     e.deserialize(jwe)
     e.decrypt(k)
     return e.plaintext
+
+
+def extract_email_from_string(email_string):
+    match = re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', email_string)
+    return match.group(0)
