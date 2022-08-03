@@ -45,7 +45,7 @@ def store_reply_record(mail, ses_response):
     payload = {"lookup": lookup, "encrypted_metadata": encrypted_metadata}
     # Request to API to store payload
     url = f'{ROOT_API}reply'
-    requests.post(url=url, json=payload, headers=HEADERS)
+    r = requests.post(url=url, json=payload, headers=HEADERS)
 
 
 def reply_allowed(from_address, to_address):
