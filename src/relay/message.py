@@ -65,7 +65,7 @@ class Message:
         self.to_address = None
 
     def response(self, code, msg):
-        return {'code': code, 'message': msg, 'from': self.from_address, 'to': self.to_address}
+        return {'status_code': code, 'message': msg, 'from': self.from_address, 'to': self.to_address}
 
     @property
     def sns_message(self):
