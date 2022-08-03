@@ -144,14 +144,13 @@ class Message:
             return {'status_code': 400, 'message': "No In-Reply-To header"}
 
         reply_record = get_reply_record_from_lookup_key(lookup_key)
-
+        if reply_record is None:
+            return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header", 'from': from_address}
         decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
         to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
         to_address = extract_email_from_string(to_address)
-        if reply_record is None:
-            return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header", 'from': from_address,
-                    'to': to_address}
+
         outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
         if not reply_allowed(from_address, to_address):
             return {'status_code': 403, 'message': "Relay replies require a premium account"}
