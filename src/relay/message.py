@@ -65,7 +65,7 @@ class Message:
         self.to_address = None
 
     def response(self, code, msg):
-        return {'status_code': code, 'message': msg, 'from': self.from_address, 'to': self.to_address}
+        return response(code=code, msg=msg, from_address=self.from_address, to_address=self.to_address)
 
     @property
     def sns_message(self):
@@ -153,8 +153,8 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        return ses_client.ses_send_raw_email(outbound_from_address, self.to_address, subject, message_body, attachments,
-                                             None, self.sns_mail)
+        return ses_client.ses_send_raw_email(outbound_from_address, self.to_address,
+                                             subject, message_body, attachments, self.sns_mail)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -266,8 +266,8 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
         formatted_from_address = generate_relay_from(self.from_address)
-        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments,
-                                          self.sns_mail)
+        return ses_client.ses_send_raw_email(formatted_from_address, user_to_address, subject, message_body,
+                                             attachments, self.sns_mail, reply_address=None)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]

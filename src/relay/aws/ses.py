@@ -1,24 +1,18 @@
 from relay.aws import AWS
 from relay.logger import logger
 from email.mime.text import MIMEText
-from relay.config import AWS_SES_CONFIG_SET
+from relay.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from relay.locker_api import store_reply_record
-from relay.config import RELAY_DOMAINS
+from relay.utils import response
 
 
 class SES(AWS):
     def __init__(self):
         super().__init__()
         self.service = 'ses'
-
-    def ses_relay_email(self, from_address, to_address, subject, message_body, attachments, mail):
-        reply_address = f"replies@{RELAY_DOMAINS[0]}"
-        response = self.ses_send_raw_email(from_address, to_address, subject,
-                                           message_body, attachments, reply_address, mail)
-        return response
 
     @staticmethod
     def add_body_to_message(msg, message_body):
@@ -69,7 +63,8 @@ class SES(AWS):
         msg["Reply-To"] = reply_address
         return msg
 
-    def ses_send_raw_email(self, from_address, to_address, subject, message_body, attachments, reply_address, mail):
+    def ses_send_raw_email(self, from_address, to_address, subject, message_body, attachments, mail,
+                           reply_address=REPLY_EMAIL):
         msg_with_headers = self.start_message_with_headers(subject, from_address, to_address, reply_address)
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
@@ -86,9 +81,8 @@ class SES(AWS):
             store_reply_record(mail, ses_response)
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
-            return {'status_code': 503, 'message': "SES client error on Raw Email",
-                    'from': from_address, 'to': to_address}
-        return {'status_code': 200, 'message': "Sent email to final recipient", 'from': from_address, 'to': to_address}
+            return response(503, "SES client error on Raw Email", from_address, to_address)
+        return response(200, "Sent email to final recipient", from_address, to_address)
 
 
 ses_client = SES()

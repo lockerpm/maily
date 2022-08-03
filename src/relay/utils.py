@@ -156,3 +156,7 @@ def wrap_html_email(original_html):
 
 def get_verdict(receipt, verdict_type):
     return receipt["%sVerdict" % verdict_type]["status"]
+
+
+def response(code, msg, from_address, to_address):
+    return {'status_code': code, 'message': msg, 'from': from_address, 'to': to_address}
