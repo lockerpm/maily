@@ -64,8 +64,8 @@ class Message:
         self.from_address = None
         self.to_address = None
 
-    def response(self, code, msg):
-        return response(code=code, msg=msg, from_address=self.from_address, to_address=self.to_address)
+    def response(self, code, message):
+        return {'status_code': code, 'message': message, 'from': self.from_address, 'to': self.to_address}
 
     @property
     def sns_message(self):
@@ -153,8 +153,8 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        return ses_client.ses_send_raw_email(outbound_from_address, self.to_address,
-                                             subject, message_body, attachments, self.sns_mail)
+        return self.ses_relay_email(outbound_from_address, self.to_address,
+                                    subject, message_body, attachments, self.sns_mail)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -192,6 +192,15 @@ class Message:
         except (KeyError, TypeError):
             logger.error(f'sns_inbound_message_receipt_malformed. receipt_action: {message_json_receipt["action"]}')
         return bucket, object_key
+
+    def ses_relay_email(self, from_address, to_address, subject, message_body, attachments, mail,
+                        reply_address=REPLY_EMAIL):
+        response = ses_client.ses_send_raw_email(from_address, to_address, subject,
+                                                 message_body, attachments, mail, reply_address)
+        if response:
+            return self.response(200, "Sent email to final recipient")
+        else:
+            return self.response(503, "SES client error on Raw Email")
 
     def get_text_html_attachments(self):
         if self.sns_message_content is None:
@@ -266,8 +275,9 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
         formatted_from_address = generate_relay_from(self.from_address)
-        return ses_client.ses_send_raw_email(formatted_from_address, user_to_address, subject, message_body,
-                                             attachments, self.sns_mail, reply_address=None)
+        # self.from_address = formatted_from_address
+        return self.ses_relay_email(formatted_from_address, user_to_address, subject, message_body,
+                                    attachments, self.sns_mail, reply_address=None)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]

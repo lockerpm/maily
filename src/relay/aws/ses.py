@@ -6,7 +6,6 @@ from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from relay.locker_api import store_reply_record
-from relay.utils import response
 
 
 class SES(AWS):
@@ -81,8 +80,8 @@ class SES(AWS):
             store_reply_record(mail, ses_response)
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
-            return response(503, "SES client error on Raw Email", from_address, to_address)
-        return response(200, "Sent email to final recipient", from_address, to_address)
+            return False
+        return True
 
 
 ses_client = SES()
