@@ -1,11 +1,8 @@
 import os
 import pem
 import html
-import json
 import shlex
-import base64
 import OpenSSL
-import requests
 from relay.utils import *
 from OpenSSL import crypto
 from relay import ROOT_PATH
@@ -18,6 +15,7 @@ from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
+from relay.exceptions import InReplyToNotFound, TooBigFile
 from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
 from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 
@@ -62,11 +60,6 @@ TopicArn
 Type
 {Type}
 """
-
-
-class InReplyToNotFound(Exception):
-    def __init__(self, message="No In-Reply-To header."):
-        self.message = message
 
 
 class Message:
@@ -156,6 +149,8 @@ class Message:
             return {'status_code': 403, 'message': "Relay replies require a premium account"}
         try:
             text_content, html_content, attachments = self.get_text_html_attachments()
+        except TooBigFile:
+            return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
         except ClientError as e:
             if e.response["Error"].get("Code", "") == "NoSuchKey":
                 logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
@@ -257,6 +252,8 @@ class Message:
             # assume email content in S3
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
             message_content = s3_client.get_message_content_from_s3(bucket, object_key)
+            if len(message_content) > 10485760:
+                raise TooBigFile
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
@@ -307,6 +304,8 @@ class Message:
 
         try:
             text_content, html_content, attachments = self.get_text_html_attachments()
+        except TooBigFile:
+            return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
         except ClientError as e:
             if e.response["Error"].get("Code", "") == "NoSuchKey":
                 logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
