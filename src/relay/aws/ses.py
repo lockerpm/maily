@@ -86,7 +86,8 @@ class SES(AWS):
             store_reply_record(mail, ses_response)
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
-            return {'status_code': 503, 'message': "SES client error on Raw Email"}
+            return {'status_code': 503, 'message': "SES client error on Raw Email",
+                    'from': from_address, 'to': to_address}
         return {'status_code': 200, 'message': "Sent email to final recipient", 'from': from_address, 'to': to_address}
 
 
