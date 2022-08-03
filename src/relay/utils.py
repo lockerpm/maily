@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import base64
@@ -9,7 +10,11 @@ from email.headerregistry import Address
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from django.template.defaultfilters import linebreaksbr, urlize
-from relay.config import RELAY_FROM_ADDRESS
+from relay.config import RELAY_FROM_ADDRESS, RELAY_DOMAINS
+from relay.logger import logger
+from tempfile import SpooledTemporaryFile
+from relay import ROOT_PATH
+from jinja2 import Template
 
 
 def get_message_id_bytes(message_id_str):
@@ -86,3 +91,68 @@ def decrypt_reply_metadata(key, jwe):
 def extract_email_from_string(email_string):
     match = re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', email_string)
     return match.group(0)
+
+
+def get_recipient_with_relay_domain(recipients):
+    for recipient in recipients:
+        for domain in RELAY_DOMAINS:
+            if domain in recipient:
+                return recipient
+    return None
+
+
+def get_attachment(part):
+    fn = part.get_filename()
+    payload = part.get_payload(decode=True)
+    attachment = SpooledTemporaryFile(
+        max_size=150 * 1000, prefix="relay_attachment_"  # 150KB max from SES
+    )
+    attachment.write(payload)
+    return fn, attachment
+
+
+def get_all_contents_email(email_message):
+    text_content = None
+    html_content = None
+    attachments = []
+    if email_message.is_multipart():
+        for part in email_message.walk():
+            try:
+                if part.is_attachment():
+                    att_name, att = get_attachment(part)
+                    attachments.append((att_name, att))
+                    continue
+                if part.get_content_type() == "text/plain":
+                    text_content = part.get_content()
+                if part.get_content_type() == "text/html":
+                    html_content = part.get_content()
+            except KeyError:
+                # log the un-handled content type but don't stop processing
+                logger.error(f"part.get_content(). type:{part.get_content_type()}")
+        if text_content is not None and html_content is None:
+            html_content = urlize_and_linebreaks(text_content)
+    else:
+        if email_message.get_content_type() == "text/plain":
+            text_content = email_message.get_content()
+            html_content = urlize_and_linebreaks(email_message.get_content())
+        if email_message.get_content_type() == "text/html":
+            html_content = email_message.get_content()
+
+    # TODO: if html_content is still None, wrap the text_content with our
+    # header and footer HTML and send that as the html_content
+    return text_content, html_content, attachments
+
+
+def wrap_html_email(original_html):
+    """
+    Add Relay banners, surveys, etc. to an HTML email
+    """
+    email_context = {
+        "original_html": original_html
+    }
+    template_path = os.path.join(ROOT_PATH, "templates", "wrapped_email.html")
+    return Template(open(template_path, encoding="utf-8").read()).render(email_context)
+
+
+def get_verdict(receipt, verdict_type):
+    return receipt["%sVerdict" % verdict_type]["status"]
