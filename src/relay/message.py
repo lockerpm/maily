@@ -1,23 +1,19 @@
-import os
 import pem
 import html
 import shlex
 import OpenSSL
 from relay.utils import *
 from OpenSSL import crypto
-from relay import ROOT_PATH
-from jinja2 import Template
 from relay.aws.s3 import s3_client
 from relay.aws.ses import ses_client
 from relay.logger import logger
 from urllib.request import urlopen
-from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
 from relay.exceptions import InReplyToNotFound, TooBigFile
 from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
-from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
+from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -112,14 +108,6 @@ class Message:
         except (KeyError, AttributeError):
             return None
 
-    @staticmethod
-    def get_recipient_with_relay_domain(recipients):
-        for recipient in recipients:
-            for domain in RELAY_DOMAINS:
-                if domain in recipient:
-                    return recipient
-        return None
-
     def get_keys_from_headers(self):
         in_reply_to = None
         for header in self.sns_mail["headers"]:
@@ -147,17 +135,11 @@ class Message:
         outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
         if not reply_allowed(from_address, to_address):
             return {'status_code': 403, 'message': "Relay replies require a premium account"}
-        try:
-            text_content, html_content, attachments = self.get_text_html_attachments()
-        except TooBigFile:
-            return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
-        except ClientError as e:
-            if e.response["Error"].get("Code", "") == "NoSuchKey":
-                logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
-                return {'status_code': 404, 'message': "Email not in S3"}
-            logger.error('s3_client_error_get_email: {e.response["Error"]}')
-            # we are returning a 500 so that SNS can retry the email processing
-            return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
+        mail_content = self.get_text_html_attachments()
+        if isinstance(mail_content, dict):
+            return mail_content
+        else:
+            text_content, html_content, attachments = mail_content[0], mail_content[1], mail_content[2]
 
         message_body = {}
         if html_content:
@@ -177,13 +159,13 @@ class Message:
         headers_to_check = "to", "cc"
         for header in headers_to_check:
             if header in self.mail_common_headers:
-                recipient = self.get_recipient_with_relay_domain(self.mail_common_headers[header])
+                recipient = get_recipient_with_relay_domain(self.mail_common_headers[header])
                 if recipient is not None:
                     return parseaddr(recipient)[1]
 
         # SES-SNS sends bcc in a different part of the message
         recipients = self.sns_receipt["recipients"]
-        return self.get_recipient_with_relay_domain(recipients)
+        return get_recipient_with_relay_domain(recipients)
 
     def get_bucket_and_key_from_s3_json(self):
         bucket = None
@@ -202,79 +184,31 @@ class Message:
             if "S3" in message_json_receipt["action"]["type"]:
                 bucket = message_json_receipt["action"]["bucketName"]
                 object_key = message_json_receipt["action"]["objectKey"]
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError):
             logger.error(f'sns_inbound_message_receipt_malformed. receipt_action: {message_json_receipt["action"]}')
         return bucket, object_key
-
-    @staticmethod
-    def get_attachment(part):
-        fn = part.get_filename()
-        payload = part.get_payload(decode=True)
-        attachment = SpooledTemporaryFile(
-            max_size=150 * 1000, prefix="relay_attachment_"  # 150KB max from SES
-        )
-        attachment.write(payload)
-        return fn, attachment
-
-    def get_all_contents(self, email_message):
-        text_content = None
-        html_content = None
-        attachments = []
-        if email_message.is_multipart():
-            for part in email_message.walk():
-                try:
-                    if part.is_attachment():
-                        att_name, att = self.get_attachment(part)
-                        attachments.append((att_name, att))
-                        continue
-                    if part.get_content_type() == "text/plain":
-                        text_content = part.get_content()
-                    if part.get_content_type() == "text/html":
-                        html_content = part.get_content()
-                except KeyError:
-                    # log the un-handled content type but don't stop processing
-                    logger.error(f"part.get_content(). type:{part.get_content_type()}")
-            if text_content is not None and html_content is None:
-                html_content = urlize_and_linebreaks(text_content)
-        else:
-            if email_message.get_content_type() == "text/plain":
-                text_content = email_message.get_content()
-                html_content = urlize_and_linebreaks(email_message.get_content())
-            if email_message.get_content_type() == "text/html":
-                html_content = email_message.get_content()
-
-        # TODO: if html_content is still None, wrap the text_content with our
-        # header and footer HTML and send that as the html_content
-        return text_content, html_content, attachments
 
     def get_text_html_attachments(self):
         if self.sns_message_content is None:
             # assume email content in S3
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
-            message_content = s3_client.get_message_content_from_s3(bucket, object_key)
-            if len(message_content) > 10485760:
-                raise TooBigFile
+            try:
+                message_content = s3_client.get_message_content_from_s3(bucket, object_key)
+                if len(message_content) > 10485760:
+                    return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
+            except ClientError as e:
+                if e.response["Error"].get("Code", "") == "NoSuchKey":
+                    logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
+                    return {'status_code': 404, 'message': "Email not in S3"}
+                logger.error('s3_client_error_get_email: {e.response["Error"]}')
+                # we are returning a 500 so that SNS can retry the email processing
+                return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
 
-        text_content, html_content, attachments = self.get_all_contents(bytes_email_message)
+        text_content, html_content, attachments = get_all_contents_email(bytes_email_message)
         return text_content, html_content, attachments
-
-    @staticmethod
-    def wrap_html_email(original_html):
-        """
-        Add Relay banners, surveys, etc. to an HTML email
-        """
-        email_context = {
-            "original_html": original_html
-        }
-        template_path = os.path.join(ROOT_PATH, "templates", "wrapped_email.html")
-        return Template(open(template_path, encoding="utf-8").read()).render(email_context)
-
-    @staticmethod
-    def get_verdict(receipt, verdict_type):
-        return receipt["%sVerdict" % verdict_type]["status"]
 
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
@@ -284,7 +218,7 @@ class Message:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
 
-        if self.get_verdict(self.sns_receipt, "dmarc") == "FAIL":
+        if get_verdict(self.sns_receipt, "dmarc") == "FAIL":
             dmarc_policy = self.sns_receipt.get("dmarcPolicy", "none")
             if dmarc_policy == "reject":
                 return {'status_code': 400, 'message': "DMARC failure, policy is reject"}
@@ -302,21 +236,15 @@ class Message:
             return {'status_code': 400, 'message': f"Destination does not exist {to_address}"}
         subject = self.mail_common_headers.get("subject", "")
 
-        try:
-            text_content, html_content, attachments = self.get_text_html_attachments()
-        except TooBigFile:
-            return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
-        except ClientError as e:
-            if e.response["Error"].get("Code", "") == "NoSuchKey":
-                logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
-                return {'status_code': 404, 'message': "Email not in S3"}
-            logger.error('s3_client_error_get_email: {e.response["Error"]}')
-            # we are returning a 503 so that SNS can retry the email processing
-            return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
+        mail_content = self.get_text_html_attachments()
+        if isinstance(mail_content, dict):
+            return mail_content
+        else:
+            text_content, html_content, attachments = mail_content[0], mail_content[1], mail_content[2]
 
         message_body = {}
         if html_content:
-            wrapped_html = self.wrap_html_email(original_html=html_content)
+            wrapped_html = wrap_html_email(original_html=html_content)
             message_body["Html"] = {"Charset": "UTF-8", "Data": wrapped_html}
 
         if text_content:
