@@ -303,7 +303,7 @@ class Message:
 
         user_to_address = get_to_address(to_address)
         if user_to_address is None:
-            return {'status_code': 400, 'message': "Destination does not exist"}
+            return {'status_code': 400, 'message': f"Destination does not exist {to_address}"}
         subject = self.mail_common_headers.get("subject", "")
 
         try:
