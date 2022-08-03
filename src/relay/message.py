@@ -11,7 +11,7 @@ from urllib.request import urlopen
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.exceptions import InReplyToNotFound, TooBigFile
+from relay.exceptions import InReplyToNotFound
 from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
 from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 
@@ -61,6 +61,11 @@ Type
 class Message:
     def __init__(self, sqs_raw):
         self.sqs_raw = sqs_raw
+        self.from_address = None
+        self.to_address = None
+
+    def response(self, code, msg):
+        return {'code': code, 'message': msg, 'from': self.from_address, 'to': self.to_address}
 
     @property
     def sns_message(self):
@@ -118,23 +123,23 @@ class Message:
         if in_reply_to is None:
             raise InReplyToNotFound
 
-    def handle_reply(self, from_address):
+    def handle_reply(self):
         try:
             lookup_key, encryption_key = self.get_keys_from_headers()
         except InReplyToNotFound:
-            return {'status_code': 400, 'message': "No In-Reply-To header"}
+            return self.response(400, "No In-Reply-To header")
 
         reply_record = get_reply_record_from_lookup_key(lookup_key)
         if reply_record is None:
-            return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header", 'from': from_address}
+            return self.response(400, "Unknown or stale In-Reply-To header")
         decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
-        to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
-        to_address = extract_email_from_string(to_address)
+        self.to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
+        self.to_address = extract_email_from_string(self.to_address)
 
         outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
-        if not reply_allowed(from_address, to_address):
-            return {'status_code': 403, 'message': "Relay replies require a premium account"}
+        if not reply_allowed(self.from_address, self.to_address):
+            return self.response(403, "Relay replies require a premium account")
         mail_content = self.get_text_html_attachments()
         if isinstance(mail_content, dict):
             return mail_content
@@ -148,7 +153,7 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        return ses_client.ses_send_raw_email(outbound_from_address, to_address, subject, message_body, attachments,
+        return ses_client.ses_send_raw_email(outbound_from_address, self.to_address, subject, message_body, attachments,
                                              None, self.sns_mail)
 
     def get_relay_recipient(self):
@@ -195,14 +200,14 @@ class Message:
             try:
                 message_content = s3_client.get_message_content_from_s3(bucket, object_key)
                 if len(message_content) > 10485760:
-                    return {'status_code': 400, 'message': "Attachments are larger than AWS allows"}
+                    return self.response(400, "Attachments are larger than AWS allows")
             except ClientError as e:
                 if e.response["Error"].get("Code", "") == "NoSuchKey":
                     logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
-                    return {'status_code': 404, 'message': "Email not in S3"}
+                    return self.response(404, "Email not in S3")
                 logger.error('s3_client_error_get_email: {e.response["Error"]}')
                 # we are returning a 500 so that SNS can retry the email processing
-                return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
+                return self.response(503, "Cannot fetch the message content from S3")
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
@@ -212,28 +217,28 @@ class Message:
 
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
-            return {'status_code': 400, 'message': "We don't handle bounce message"}
+            return self.response(400, "We don't handle bounce message")
 
         if self.mail_common_headers is None:
             logger.error("[!] SNS message without commonHeaders")
-            return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
+            return self.response(400, "Received SNS notification without commonHeaders")
 
         if get_verdict(self.sns_receipt, "dmarc") == "FAIL":
             dmarc_policy = self.sns_receipt.get("dmarcPolicy", "none")
             if dmarc_policy == "reject":
-                return {'status_code': 400, 'message': "DMARC failure, policy is reject"}
+                return self.response(400, "DMARC failure, policy is reject")
 
-        to_address = self.get_relay_recipient()
-        if to_address is None:
-            return {'status_code': 400, 'message': "Address does not exist"}
+        self.to_address = self.get_relay_recipient()
+        if self.to_address is None:
+            return self.response(400, "Address does not exist")
 
-        from_address = parseaddr(self.mail_common_headers["from"][0])[1]
-        if to_address == REPLY_EMAIL:
-            return self.handle_reply(from_address)
+        self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        if self.to_address == REPLY_EMAIL:
+            return self.handle_reply()
 
-        user_to_address = get_to_address(to_address)
+        user_to_address = get_to_address(self.to_address)
         if user_to_address is None:
-            return {'status_code': 400, 'message': f"Destination does not exist {to_address}"}
+            return self.response(400, "Destination does not exist")
         subject = self.mail_common_headers.get("subject", "")
 
         mail_content = self.get_text_html_attachments()
@@ -256,11 +261,11 @@ class Message:
                 "{alias}. To stop receiving emails sent to this alias, "
                 "update the forwarding settings in your dashboard.\n"
                 "{extra_msg}---Begin Email---\n"
-            ).format(alias=to_address, extra_msg=attachment_msg)
+            ).format(alias=self.to_address, extra_msg=attachment_msg)
             wrapped_text = relay_header_text + text_content
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
-        formatted_from_address = generate_relay_from(from_address)
+        formatted_from_address = generate_relay_from(self.from_address)
         return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments,
                                           self.sns_mail)
 
@@ -335,24 +340,21 @@ class Message:
     def sns_inbound_logic(self):
         if self.sns_message_type == "SubscriptionConfirmation":
             logger.info(f'SNS SubscriptionConfirmation: {self.sns_message["SubscribeURL"]}')
-            return {'status_code': 200, 'message': 'Logged SubscribeURL'}
+            return self.response(200, 'Logged SubscribeURL')
         if self.sns_message_type == "Notification":
             return self.sns_notification()
 
         logger.error(f"SNS message type did not fall under the SNS inbound logic: {shlex.quote(self.sns_message_type)}")
-        return {'status_code': 400, 'message': 'Received SNS message with type not handled in inbound log'}
+        return self.response(400, 'Received SNS message with type not handled in inbound log')
 
     def sns_notification(self):
         if not self.sns_message_body:
-            return {'status_code': 400, 'message': 'Received SNS notification with non-JSON body'}
+            return self.response(400, 'Received SNS notification with non-JSON body')
 
         if self.sns_notification_type not in ["Received", "Bounce"] and self.sns_event_type != "Bounce":
             logger.error("SNS notification for unsupported type")
-            return {
-                'status_code': 400,
-                'message': f'Received SNS notification for unsupported Type: '
-                           f'{html.escape(shlex.quote(self.sns_notification_type))}'
-            }
+            return self.response(400, f'Received SNS notification for unsupported Type: '
+                                      f'{html.escape(shlex.quote(self.sns_notification_type))}')
         response = self.handle_sns_message()
         bucket, object_key = self.get_bucket_and_key_from_s3_json()
         if response['status_code'] < 500:
