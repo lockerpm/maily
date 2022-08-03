@@ -91,11 +91,12 @@ class SQS(AWS):
                     "error": str(e)
                 }
             )
-        results['details'] = details
-        if details['status_code'] != 200:
-            results['details']['sent_success'] = False
-        else:
-            results['details']['sent_success'] = True
+        if details is not None:
+            results['details'] = details
+            if details['status_code'] != 200:
+                results['details']['sent_success'] = False
+            else:
+                results['details']['sent_success'] = True
         return results
 
     def poll_queue_for_messages(self):

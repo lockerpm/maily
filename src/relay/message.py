@@ -18,7 +18,8 @@ from tempfile import SpooledTemporaryFile
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, LOCKER_API_RELAY_DESTINATION
+from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
+from relay.config import RELAY_DOMAINS, AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -61,6 +62,11 @@ TopicArn
 Type
 {Type}
 """
+
+
+class InReplyToNotFound(Exception):
+    def __init__(self, message="No In-Reply-To header."):
+        self.message = message
 
 
 class Message:
@@ -120,6 +126,54 @@ class Message:
                 if domain in recipient:
                     return recipient
         return None
+
+    def get_keys_from_headers(self):
+        in_reply_to = None
+        for header in self.sns_mail["headers"]:
+            if header["name"].lower() == "in-reply-to":
+                in_reply_to = header["value"]
+                message_id_bytes = get_message_id_bytes(in_reply_to)
+                return derive_reply_keys(message_id_bytes)
+        if in_reply_to is None:
+            raise InReplyToNotFound
+
+    def handle_reply(self, from_address):
+        try:
+            lookup_key, encryption_key = self.get_keys_from_headers()
+        except InReplyToNotFound:
+            return {'status_code': 400, 'message': "No In-Reply-To header"}
+
+        reply_record = get_reply_record_from_lookup_key(lookup_key)
+        if reply_record is None:
+            return {'status_code': 400, 'message': "Unknown or stale In-Reply-To header"}
+
+        decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
+        subject = self.mail_common_headers.get("subject", "")
+        to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
+        to_address = extract_email_from_string(to_address)
+
+        outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
+        if not reply_allowed(from_address, to_address):
+            return {'status_code': 403, 'message': "Relay replies require a premium account"}
+        try:
+            text_content, html_content, attachments = self.get_text_html_attachments()
+        except ClientError as e:
+            if e.response["Error"].get("Code", "") == "NoSuchKey":
+                logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
+                return {'status_code': 404, 'message': "Email not in S3"}
+            logger.error('s3_client_error_get_email: {e.response["Error"]}')
+            # we are returning a 500 so that SNS can retry the email processing
+            return {'status_code': 503, 'message': "Cannot fetch the message content from S3"}
+
+        message_body = {}
+        if html_content:
+            message_body["Html"] = {"Charset": "UTF-8", "Data": html_content}
+
+        if text_content:
+            message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
+
+        return ses_client.ses_send_raw_email(outbound_from_address, to_address, subject, message_body, attachments,
+                                             None, self.sns_mail)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -226,37 +280,30 @@ class Message:
     def get_verdict(receipt, verdict_type):
         return receipt["%sVerdict" % verdict_type]["status"]
 
-    @staticmethod
-    def get_to_address(relay_address):
-        """
-        Connect to the Locker API to get the corresponding to_address with relay_address
-        """
-        try:
-            r = requests.get(LOCKER_API_RELAY_DESTINATION + relay_address).json()
-            return r['destination']
-        except (requests.exceptions.ConnectionError, KeyError):
-            return None
-
     def handle_sns_message(self):
         if self.sns_notification_type == "Bounce" or self.sns_event_type == "Bounce":
             return {'status_code': 400, 'message': "We don't handle bounce message"}
+
         if self.mail_common_headers is None:
             logger.error("[!] SNS message without commonHeaders")
             return {'status_code': 400, 'message': "Received SNS notification without commonHeaders"}
-
-        to_address = self.get_relay_recipient()
-        if to_address is None:
-            return {'status_code': 400, 'message': "Address does not exist"}
-        user_to_address = self.get_to_address(to_address)
-        if user_to_address is None:
-            return {'status_code': 400, 'message': "Destination does not exist"}
 
         if self.get_verdict(self.sns_receipt, "dmarc") == "FAIL":
             dmarc_policy = self.sns_receipt.get("dmarcPolicy", "none")
             if dmarc_policy == "reject":
                 return {'status_code': 400, 'message': "DMARC failure, policy is reject"}
 
+        to_address = self.get_relay_recipient()
+        if to_address is None:
+            return {'status_code': 400, 'message': "Address does not exist"}
+
         from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        if to_address == REPLY_EMAIL:
+            return self.handle_reply(from_address)
+
+        user_to_address = get_to_address(to_address)
+        if user_to_address is None:
+            return {'status_code': 400, 'message': "Destination does not exist"}
         subject = self.mail_common_headers.get("subject", "")
 
         try:
@@ -288,7 +335,8 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": wrapped_text}
 
         formatted_from_address = generate_relay_from(from_address)
-        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments)
+        return ses_client.ses_relay_email(formatted_from_address, user_to_address, subject, message_body, attachments,
+                                          self.sns_mail)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]

@@ -5,6 +5,8 @@ from relay.config import AWS_SES_CONFIG_SET
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from relay.locker_api import store_reply_record
+from relay.config import RELAY_DOMAINS
 
 
 class SES(AWS):
@@ -12,14 +14,10 @@ class SES(AWS):
         super().__init__()
         self.service = 'ses'
 
-    def ses_relay_email(self, from_address, to_address, subject, message_body, attachments):
-        # We will handle reply later
-        # reply_address = "replies@%s" % get_domains_from_settings().get(
-        #     "RELAY_DOMAIN"
-        # )
-        reply_address = None
+    def ses_relay_email(self, from_address, to_address, subject, message_body, attachments, mail):
+        reply_address = f"replies@{RELAY_DOMAINS[0]}"
         response = self.ses_send_raw_email(from_address, to_address, subject,
-                                           message_body, attachments, reply_address)
+                                           message_body, attachments, reply_address, mail)
         return response
 
     @staticmethod
@@ -71,12 +69,12 @@ class SES(AWS):
         msg["Reply-To"] = reply_address
         return msg
 
-    def ses_send_raw_email(self, from_address, to_address, subject, message_body, attachments, reply_address):
+    def ses_send_raw_email(self, from_address, to_address, subject, message_body, attachments, reply_address, mail):
         msg_with_headers = self.start_message_with_headers(subject, from_address, to_address, reply_address)
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
         try:
-            self.client.send_raw_email(
+            ses_response = self.client.send_raw_email(
                 Source=from_address,
                 Destinations=[to_address],
                 RawMessage={
@@ -84,6 +82,8 @@ class SES(AWS):
                 },
                 ConfigurationSetName=AWS_SES_CONFIG_SET,
             )
+
+            store_reply_record(mail, ses_response)
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
             return {'status_code': 503, 'message': "SES client error on Raw Email"}

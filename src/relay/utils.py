@@ -1,3 +1,8 @@
+import re
+import json
+import base64
+import jwcrypto.jwe
+import jwcrypto.jwk
 from email.header import Header
 from email.utils import parseaddr
 from email.headerregistry import Address
@@ -12,8 +17,12 @@ def get_message_id_bytes(message_id_str):
     return message_id.encode()
 
 
+def b64_lookup_key(lookup_key):
+    return base64.urlsafe_b64encode(lookup_key).decode("ascii")
+
+
 def derive_reply_keys(message_id):
-    """Derive the lookup key and encrytion key from an aliased message id."""
+    """Derive the lookup key and encryption key from an aliased message id."""
     algorithm = hashes.SHA256()
     hkdf = HKDFExpand(algorithm=algorithm, length=16, info=b"replay replies lookup key")
     lookup_key = hkdf.derive(message_id)
@@ -35,7 +44,7 @@ def generate_relay_from(original_from_address):
     # Encoding display names to longer than 998 chars will add wrap
     # characters which are unsafe. (See https://bugs.python.org/issue39073)
     # So, truncate the original sender to 900 chars so we can add our
-    # "[via Relay] <relayfrom>" and encode it all.
+    # "[via Relay] <relay_from>" and encode it all.
     if len(original_from_address) > 998:
         original_from_address = "%s ..." % original_from_address[:900]
     # line breaks in From: will encode to unsafe chars, so strip them.
@@ -48,3 +57,32 @@ def generate_relay_from(original_from_address):
         Address(display_name.encode(maxlinelen=998), addr_spec=relay_from_address)
     )
     return formatted_from_address
+
+
+def encrypt_reply_metadata(key, payload):
+    """Encrypt the given payload into a JWE, using the given key."""
+    # This is a bit dumb, we have to base64-encode the key in order to load it :-/
+    k = jwcrypto.jwk.JWK(
+        kty="oct", k=base64.urlsafe_b64encode(key).rstrip(b"=").decode("ascii")
+    )
+    e = jwcrypto.jwe.JWE(
+        json.dumps(payload), json.dumps({"alg": "dir", "enc": "A256GCM"}), recipient=k
+    )
+    return e.serialize(compact=True)
+
+
+def decrypt_reply_metadata(key, jwe):
+    """Decrypt the given JWE into a json payload, using the given key."""
+    # This is a bit dumb, we have to base64-encode the key in order to load it :-/
+    k = jwcrypto.jwk.JWK(
+        kty="oct", k=base64.urlsafe_b64encode(key).rstrip(b"=").decode("ascii")
+    )
+    e = jwcrypto.jwe.JWE()
+    e.deserialize(jwe)
+    e.decrypt(k)
+    return e.plaintext
+
+
+def extract_email_from_string(email_string):
+    match = re.search(r'[\w.+-]+@[\w-]+\.[\w.-]+', email_string)
+    return match.group(0)
