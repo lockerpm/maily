@@ -91,6 +91,8 @@ class SQS(AWS):
                     "error": str(e)
                 }
             )
+            logger.error()
+
         if details is not None:
             results['details'] = details
             if details['status_code'] != 200:
