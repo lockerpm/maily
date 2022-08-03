@@ -4,16 +4,16 @@ import shlex
 import OpenSSL
 from relay.utils import *
 from OpenSSL import crypto
-from relay.aws.s3 import s3_client
-from relay.aws.ses import ses_client
 from relay.logger import logger
 from urllib.request import urlopen
+from relay.aws.s3 import s3_client
+from relay.aws.ses import ses_client
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
 from relay.exceptions import InReplyToNotFound
-from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
 from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
+from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}

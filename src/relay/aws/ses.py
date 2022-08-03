@@ -1,11 +1,11 @@
 from relay.aws import AWS
 from relay.logger import logger
 from email.mime.text import MIMEText
-from relay.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
 from relay.locker_api import store_reply_record
+from email.mime.application import MIMEApplication
+from relay.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
 
 
 class SES(AWS):
