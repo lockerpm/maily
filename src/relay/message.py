@@ -154,7 +154,7 @@ class Message:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
         return self.ses_relay_email(outbound_from_address, self.to_address,
-                                    subject, message_body, attachments, self.sns_mail)
+                                    subject, message_body, attachments, self.sns_mail, reply_address=None)
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
@@ -277,7 +277,7 @@ class Message:
         formatted_from_address = generate_relay_from(self.from_address)
         # self.from_address = formatted_from_address
         return self.ses_relay_email(formatted_from_address, user_to_address, subject, message_body,
-                                    attachments, self.sns_mail, reply_address=None)
+                                    attachments, self.sns_mail)
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]
