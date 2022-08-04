@@ -97,6 +97,12 @@ class SQS(AWS):
             results['details'] = details
             if details['status_code'] != 200:
                 results['details']['sent_success'] = False
+                results.update(
+                    {
+                        "success": False,
+                        "error": details['message']
+                    }
+                )
             else:
                 results['details']['sent_success'] = True
         return results
@@ -151,6 +157,18 @@ class SQS(AWS):
         logger.info(f"[+] Start listening the SQS {SQS_URL}")
         self.process_queue()
         logger.info(f"[+] Stop listening the SQS {SQS_URL}")
+
+    def send_message(self, message_body, message_attributes=None):
+        if message_attributes is None:
+            message_attributes = dict()
+        response = self.client.send_message(
+            QueueUrl=SQS_URL,
+            DelaySeconds=10,
+            MessageAttributes=message_attributes,
+            MessageBody=message_body
+        )
+
+        return response['MessageId']
 
 
 sqs_client = SQS()

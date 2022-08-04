@@ -27,3 +27,9 @@ PROCESS_EMAIL_BATCH_SIZE = 10
 PROCESS_EMAIL_VISIBILITY_SECONDS = 120
 PROCESS_EMAIL_WAIT_SECONDS = 5
 PROCESS_EMAIL_DELETE_FAILED_MESSAGES = False
+
+# Domain Identity
+CF_ZONE = os.getenv('CF_ZONE')
+CF_TOKEN = os.getenv('CF_TOKEN')
+CF_HEADERS = {'Authorization': f'Bearer {CF_TOKEN}'}
+CF_API = f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE}/dns_records'

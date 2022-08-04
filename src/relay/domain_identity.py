@@ -1,40 +1,11 @@
-import os
-import time
 import boto3
-import socket
-import logging
 import requests
 import botocore.exceptions
-
-AWS_REGION = os.getenv('AWS_REGION')
-CF_ZONE = os.getenv('CF_ZONE')
-CF_TOKEN = os.getenv('CF_TOKEN')
-CF_HEADERS = {'Authorization': f'Bearer {CF_TOKEN}'}
-CF_API = f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE}/dns_records'
-WHITELIST_DOMAINS = ['maily.org']
+from relay.logger import logger
+from relay.config import *
 
 
-def get_logger():
-    format_string = '%(asctime)s {hostname} %(levelname)s %(message)s'.format(**{'hostname': socket.gethostname()})
-    format_log = logging.Formatter(format_string)
-    format_log.converter = time.gmtime
-
-    logging.basicConfig(level=logging.INFO)
-    logging.disable(logging.DEBUG)
-    for handler in logging.getLogger().handlers:
-        logging.getLogger().removeHandler(handler)
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(format_log)
-    logging.getLogger().addHandler(stream_handler)
-
-    return logging.getLogger()
-
-
-logger = get_logger()
-
-
-class Domain:
+class DomainIdentity:
     def __init__(self, domain_name):
         self.ses_client = boto3.client('ses', region_name=AWS_REGION)
         self.domain_name = domain_name
@@ -62,19 +33,19 @@ class Domain:
             # When we delete a domain and recreate it shortly after
             # the new domain will be considered as not found
             # and we should wait until get the success status
-            logger.info(f'[+] Waiting for 1 minutes until the domain identity available')
-
-            time.sleep(60)
-            self.set_mail_from()
-            return
+            logger.info(f'[+] Waiting until the domain identity available')
+            # time.sleep(60)
+            # self.set_mail_from()
+            return False
         self.create_dns_record('MX', mail_from_domain, 'feedback-smtp.us-east-1.amazonses.com', 10)
         self.create_dns_record('TXT', mail_from_domain, '"v=spf1 include:amazonses.com ~all"')
+        return True
 
     def create_domain(self):
         """
         Add a domain to authenticated list in AWS SES
         """
-        if not any(self.domain_name.endswith(f'.{d}') for d in WHITELIST_DOMAINS):
+        if not any(self.domain_name.endswith(f'.{d}') for d in RELAY_DOMAINS):
             return False
         # Add DKIM records to verify
         dkim_tokens = self.get_dkim_tokens()
@@ -87,8 +58,8 @@ class Domain:
         self.create_dns_record('MX', self.domain_name, f'inbound-smtp.{AWS_REGION}.amazonaws.com', 10)
 
         # Set mail-from domain
-        self.set_mail_from()
-        return True
+        response = self.set_mail_from()
+        return response
 
     @staticmethod
     def create_dns_record(record_type, record_key, record_value, priority=None):
@@ -148,10 +119,3 @@ class Domain:
             return response['DkimAttributes'][self.domain_name]['DkimVerificationStatus']
         except KeyError:
             return 'NotStarted'
-
-
-d = Domain('trung3.maily.org')
-# d.create_domain()
-d.delete_domain()
-x = d.get_domain_status()
-print(x)

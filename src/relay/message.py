@@ -11,9 +11,10 @@ from relay.aws.ses import ses_client
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.exceptions import InReplyToNotFound
+from relay.exceptions import InReplyToNotFound, DomainIdentityException
 from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
+from relay.domain_identity import DomainIdentity
 
 NOTIFICATION_HASH_FORMAT = """Message
 {Message}
@@ -347,12 +348,28 @@ class Message:
             }
         return None
 
+    def handle_domain_identity(self):
+        action = self.sns_message_body['action']
+        domain = self.sns_message_body['domain']
+        identity = DomainIdentity(domain)
+        if action == 'create':
+            if identity.create_domain():
+                return self.response(200, f'Created domain {domain} successfully')
+            else:
+                return self.response(500, f'Created domain {domain} unsuccessfully')
+        elif action == 'delete':
+            identity.delete_domain()
+            return self.response(200, f'Deleted domain {domain} successfully')
+        return self.response(200, 'Domain Identity successfully')
+
     def sns_inbound_logic(self):
         if self.sns_message_type == "SubscriptionConfirmation":
             logger.info(f'SNS SubscriptionConfirmation: {self.sns_message["SubscribeURL"]}')
             return self.response(200, 'Logged SubscribeURL')
-        if self.sns_message_type == "Notification":
+        elif self.sns_message_type == "Notification":
             return self.sns_notification()
+        elif self.sns_message_type == "DomainIdentity":
+            return self.handle_domain_identity()
 
         logger.error(f"SNS message type did not fall under the SNS inbound logic: {shlex.quote(self.sns_message_type)}")
         return self.response(400, 'Received SNS message with type not handled in inbound log')
