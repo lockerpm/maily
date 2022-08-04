@@ -4,7 +4,7 @@ from relay.aws.sqs import sqs_client
 from relay.domain_identity import DomainIdentity
 
 action_msg = {
-    'action': 'delete',
+    'action': 'create',
     'domain': 'trung5.maily.org'
 }
 

@@ -24,7 +24,7 @@ class DomainIdentity:
         if not any(self.domain_name.endswith(f'.{d}') for d in RELAY_DOMAINS):
             return False
         # Add DKIM records to verify
-        dkim_tokens = ses_client.get_dkim_tokens()
+        dkim_tokens = ses_client.get_dkim_tokens(self.domain_name)
         for token in dkim_tokens:
             record_key = f'{token}._domainkey.{self.domain_name}'
             record_value = f'{token}.dkim.amazonses.com'
@@ -66,7 +66,7 @@ class DomainIdentity:
         Remove all things related to this domain
         """
         # Remove DKIM records
-        dkim_tokens = ses_client.get_dkim_tokens()
+        dkim_tokens = ses_client.get_dkim_tokens(self.domain_name)
         for token in dkim_tokens:
             record_key = f'{token}._domainkey.{self.domain_name}'
             record_value = f'{token}.dkim.amazonses.com'
