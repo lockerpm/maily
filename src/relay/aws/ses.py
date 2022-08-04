@@ -1,3 +1,4 @@
+import botocore.exceptions
 from relay.aws import AWS
 from relay.logger import logger
 from email.mime.text import MIMEText
@@ -80,6 +81,45 @@ class SES(AWS):
             store_reply_record(mail, ses_response)
         except ClientError as e:
             logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
+            return False
+        return True
+
+    def get_dkim_tokens(self, domain):
+        """
+        Get tokens to verify domain
+        """
+        dkim_tokens = self.client.verify_domain_dkim(Domain=domain).get('DkimTokens')
+        logger.info(f'[+] Getting records to authenticate domain from AWS SES')
+        return dkim_tokens
+
+    def delete_identity(self, domain):
+        return self.client.delete_identity(Identity=domain)
+
+    def get_identity_status(self, domain):
+        """
+        Check the status of a domain
+        :return: Pending | Success | Failed | TemporaryFailure | NotStarted
+        """
+        response = self.client.get_identity_dkim_attributes(Identities=[domain])
+        try:
+            return response['DkimAttributes'][domain]['DkimVerificationStatus']
+        except KeyError:
+            return 'NotStarted'
+
+    def set_identity_mail_from_domain(self, domain, mail_from_domain):
+        try:
+            response = self.client.set_identity_mail_from_domain(
+                Identity=domain,
+                MailFromDomain=mail_from_domain,
+                BehaviorOnMXFailure='UseDefaultValue'
+            )
+        except botocore.exceptions.ClientError:
+            # When we delete a domain and recreate it shortly after
+            # the new domain will be considered as not found
+            # and we should wait until get the success status
+            logger.info(f'[+] Waiting until the domain identity available')
+            # time.sleep(60)
+            # self.set_mail_from()
             return False
         return True
 
