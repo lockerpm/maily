@@ -97,12 +97,9 @@ class SQS(AWS):
             results['details'] = details
             if details['status_code'] != 200:
                 results['details']['sent_success'] = False
-                results.update(
-                    {
-                        "success": False,
-                        "error": details['message']
-                    }
-                )
+                # Handle domain identity failed
+                if details['status_code'] in [511]:
+                    results.update({"success": False})
             else:
                 results['details']['sent_success'] = True
         return results

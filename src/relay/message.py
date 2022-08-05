@@ -11,7 +11,7 @@ from relay.aws.ses import ses_client
 from botocore.exceptions import ClientError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
-from relay.exceptions import InReplyToNotFound, DomainIdentityException
+from relay.exceptions import InReplyToNotFound
 from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
 from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
 from relay.domain_identity import DomainIdentity
@@ -356,7 +356,7 @@ class Message:
             if identity.create_domain():
                 return self.response(200, f'Created domain {domain} successfully')
             else:
-                return self.response(500, f'Created domain {domain} unsuccessfully')
+                return self.response(511, f'Created domain {domain} unsuccessfully')
         elif action == 'delete':
             identity.delete_domain()
             return self.response(200, f'Deleted domain {domain} successfully')
