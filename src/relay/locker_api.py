@@ -58,6 +58,43 @@ def reply_allowed(from_address, to_address):
         - this user is replying to a premium user
     """
 
-    # TODO
     # send request to API to check whether from_address or to_address is premium
-    return True
+    from_address_plan = get_relay_address_plan(from_address)
+    if from_address_plan.get("is_premium") is True:
+        return True
+    to_address_plan = get_relay_address_plan(to_address)
+    if to_address_plan.get("is_premium") is True:
+        return True
+    return False
+
+
+def get_relay_address_plan(relay_address):
+    """
+    Connect to the Locker API to retrieve the account plan
+    Response data:
+        - is_premium: (bool) The account is premium or not
+        - enabled: (bool) This relay address is enabled or not
+        - block_spam: (bool) This relay address turns on/off block spam feature
+    """
+    url = f'{ROOT_API}plan?relay_address={relay_address}'
+    try:
+        r = requests.get(url, headers=HEADERS).json()
+        return r
+    except (requests.exceptions.ConnectionError, KeyError):
+        return {}
+
+
+def send_statistic_relay_address(relay_address, statistic_type):
+    """
+    Sending statistic number of the relay address to the Locker API
+    """
+    url = f'{ROOT_API}statistics'
+    assert statistic_type in ["forwarded", "block_spam"]
+    data_send = {"relay_address": relay_address, "type": statistic_type}
+    try:
+        r = requests.post(url, headers=HEADERS, json=data_send)
+        if r.status_code >= 400:
+            return False
+        return True
+    except (requests.exceptions.ConnectionError, KeyError):
+        return False

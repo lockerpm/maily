@@ -13,7 +13,8 @@ from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
 from relay.exceptions import InReplyToNotFound
 from relay.config import AWS_REGION, AWS_SNS_TOPIC, SUPPORTED_SNS_TYPES, REPLY_EMAIL
-from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed
+from relay.locker_api import get_reply_record_from_lookup_key, get_to_address, reply_allowed, \
+    send_statistic_relay_address, get_relay_address_plan
 from relay.domain_identity import DomainIdentity
 
 NOTIFICATION_HASH_FORMAT = """Message
@@ -154,6 +155,8 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
+        # TODO: Tracking forwarded event
+        logger.info(f"handle_reply from {self.from_address} to {self.to_address}")
         return self.ses_relay_email(outbound_from_address, self.to_address,
                                     subject, message_body, attachments, self.sns_mail, reply_address=None)
 
@@ -249,6 +252,24 @@ class Message:
         user_to_address = get_to_address(self.to_address)
         if user_to_address is None:
             return self.response(400, "Destination does not exist")
+
+        try:
+            relay_address_plan = get_relay_address_plan(self.to_address)
+            enable_block_spam = relay_address_plan.get("block_spam")
+            enable_relay_address = relay_address_plan.get("enable")
+            if not enable_relay_address:
+                return self.response(400, "Address is disabled")
+
+            # Check spam
+            if get_verdict(self.sns_receipt, "spam") == "FAIL" and enable_block_spam is True:
+                # Tracking block spam event
+                statistic_result = send_statistic_relay_address(relay_address=self.to_address, statistic_type="block_spam")
+                if statistic_result is False:
+                    logger.warning(f"[!] Sending the block spam statistic data to {self.to_address} failed")
+                return self.response(400, "Address rejects spam")
+        except (KeyError, AttributeError, AssertionError):
+            logger.error()
+
         subject = self.mail_common_headers.get("subject", "")
 
         mail_content = self.get_text_html_attachments()
@@ -277,8 +298,14 @@ class Message:
 
         formatted_from_address = generate_relay_from(self.from_address)
         # self.from_address = formatted_from_address
-        return self.ses_relay_email(formatted_from_address, user_to_address, subject, message_body,
-                                    attachments, self.sns_mail)
+        ses_response = self.ses_relay_email(formatted_from_address, user_to_address, subject, message_body,
+                                            attachments, self.sns_mail)
+        # Tracking forwarded event HERE
+        if ses_response['status_code'] == 200:
+            statistic_result = send_statistic_relay_address(relay_address=self.to_address, statistic_type="forwarded")
+            if statistic_result is False:
+                logger.warning(f"[!] Sending the forwarded statistic data to {self.to_address} failed")
+        return ses_response
 
     def grab_keyfile(self):
         cert_url = self.sns_message["SigningCertURL"]
