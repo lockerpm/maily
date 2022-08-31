@@ -155,10 +155,13 @@ class Message:
         if text_content:
             message_body["Text"] = {"Charset": "UTF-8", "Data": text_content}
 
-        # TODO: Tracking forwarded event
-        logger.info(f"handle_reply from {self.from_address} to {self.to_address}")
-        return self.ses_relay_email(outbound_from_address, self.to_address,
-                                    subject, message_body, attachments, self.sns_mail, reply_address=None)
+        ses_response = self.ses_relay_email(outbound_from_address, self.to_address,
+                                            subject, message_body, attachments, self.sns_mail, reply_address=None)
+        if ses_response['status_code'] == 200:
+            statistic_result = send_statistic_relay_address(outbound_from_address, statistic_type="forwarded")
+            if statistic_result is False:
+                logger.warning(f"[!] Sending the forwarded statistic data to {outbound_from_address} failed")
+        return ses_response
 
     def get_relay_recipient(self):
         # Go thru all To, Cc, and Bcc fields and
