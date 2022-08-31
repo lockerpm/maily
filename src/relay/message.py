@@ -258,7 +258,7 @@ class Message:
             enable_block_spam = relay_address_plan.get("block_spam")
             enable_relay_address = relay_address_plan.get("enabled")
             if not enable_relay_address:
-                return self.response(400, "Address is disabled")
+                return self.response(400, f"Address {self.to_address} is disabled. Details: {relay_address_plan}")
 
             # Check spam
             if get_verdict(self.sns_receipt, "spam") == "FAIL" and enable_block_spam is True:
