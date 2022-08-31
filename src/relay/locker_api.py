@@ -59,13 +59,19 @@ def reply_allowed(from_address, to_address):
     """
 
     # send request to API to check whether from_address or to_address is premium
-    from_address_plan = get_relay_address_plan(from_address)
-    if from_address_plan.get("is_premium") is True:
-        return True
-    to_address_plan = get_relay_address_plan(to_address)
-    if to_address_plan.get("is_premium") is True:
-        return True
-    return False
+    return check_user_premium(from_address) or check_user_premium(to_address) 
+
+
+def check_user_premium(email):
+    """
+    Check a user email is premium account or not
+    """
+    url = f'{ROOT_API}plan?email={email}'
+    try:
+        r = requests.get(url, headers=HEADERS).json()
+        return r["is_premium"]
+    except (requests.exceptions.ConnectionError, KeyError):
+        return False
 
 
 def get_relay_address_plan(relay_address):
