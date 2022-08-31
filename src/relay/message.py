@@ -256,7 +256,7 @@ class Message:
         try:
             relay_address_plan = get_relay_address_plan(self.to_address)
             enable_block_spam = relay_address_plan.get("block_spam")
-            enable_relay_address = relay_address_plan.get("enable")
+            enable_relay_address = relay_address_plan.get("enabled")
             if not enable_relay_address:
                 return self.response(400, "Address is disabled")
 
