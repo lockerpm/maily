@@ -84,6 +84,9 @@ class SES(AWS):
             return False
         return True
 
+    def list_identities(self):
+        return self.client.list_identities(IdentityType='Domain', MaxItems=200)['Identities']
+
     def get_dkim_tokens(self, domain):
         """
         Get tokens to verify domain

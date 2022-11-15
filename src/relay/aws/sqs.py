@@ -151,15 +151,15 @@ class SQS(AWS):
         """
         Start the SQS here
         """
-        logger.info(f"[+] Start listening the SQS {SQS_URL}")
+        logger.info(f"[+] Start listening the SQS {AWS_SQS_URL}")
         self.process_queue()
-        logger.info(f"[+] Stop listening the SQS {SQS_URL}")
+        logger.info(f"[+] Stop listening the SQS {AWS_SQS_URL}")
 
     def send_message(self, message_body, message_attributes=None):
         if message_attributes is None:
             message_attributes = dict()
         response = self.client.send_message(
-            QueueUrl=SQS_URL,
+            QueueUrl=AWS_SQS_URL,
             DelaySeconds=10,
             MessageAttributes=message_attributes,
             MessageBody=message_body
