@@ -12,8 +12,8 @@ msg = {
     'Type': 'DomainIdentity',
     'Message': json.dumps(action_msg)
 }
-sqs_client.send_message(json.dumps(msg))
+# sqs_client.send_message(json.dumps(msg))
 
-# x = DomainIdentity('trung4.maily.org')
-# x.create_domain()
+x = DomainIdentity('maily.org')
+x.create_domain()
 # x.delete_domain()

@@ -21,7 +21,7 @@ class DomainIdentity:
         """
         Add a domain to authenticated list in AWS SES
         """
-        if not any(self.domain_name.endswith(f'.{d}') for d in RELAY_DOMAINS):
+        if not any(self.domain_name.endswith(f'{d}') for d in RELAY_DOMAINS):
             return False
         # Add DKIM records to verify
         dkim_tokens = ses_client.get_dkim_tokens(self.domain_name)
