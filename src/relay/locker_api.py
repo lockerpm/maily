@@ -1,4 +1,6 @@
+import time
 import requests
+from relay.logger import logger
 from relay.config import LOCKER_TOKEN_API
 from relay.utils import b64_lookup_key, get_message_id_bytes, derive_reply_keys, encrypt_reply_metadata
 
@@ -16,11 +18,14 @@ def get_to_address(relay_address):
     if len(relay_address.split('@')[0]) < 6:
         return None
     url = f'{ROOT_API}destination?relay_address={relay_address}'
-    try:
-        r = requests.get(url, headers=HEADERS).json()
-        return r['destination']
-    except (requests.exceptions.ConnectionError, KeyError):
-        return None
+    while True:
+        try:
+            r = requests.get(url, headers=HEADERS).json()
+            return r['destination']
+        except KeyError:
+            logger.error(f'[!] Could not look up the Relay Address. Got {r}')
+        except:
+            time.sleep(15)
 
 
 def get_reply_record_from_lookup_key(lookup_key):
@@ -59,7 +64,7 @@ def reply_allowed(from_address, to_address):
     """
 
     # send request to API to check whether from_address or to_address is premium
-    return check_user_premium(from_address) or check_user_premium(to_address) 
+    return check_user_premium(from_address) or check_user_premium(to_address)
 
 
 def check_user_premium(email):
