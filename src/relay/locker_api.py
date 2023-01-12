@@ -23,8 +23,9 @@ def get_to_address(relay_address):
             r = requests.get(url, headers=HEADERS).json()
             return r['destination']
         except KeyError:
-            logger.error(f'[!] Could not look up the Relay Address. Got {r}')
+            return None
         except:
+            logger.info('[!] Could not get the relay address since requesting to Locker API unsuccessfully')
             time.sleep(15)
 
 
