@@ -87,4 +87,4 @@ message handling. Thanks to Mozilla for the awesome project.
 
 ## License
 
-[GPLv3](./LICENSE)
+[GPLv3](LICENSE)
