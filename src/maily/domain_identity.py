@@ -1,7 +1,7 @@
 import requests
-from relay.config import *
-from relay.logger import logger
-from relay.aws.ses import ses_client
+from maily.config import *
+from maily.logger import logger
+from maily.aws.ses import ses_client
 
 
 class DomainIdentity:

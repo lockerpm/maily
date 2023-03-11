@@ -1,7 +1,7 @@
-from relay.aws import AWS
-from relay.logger import logger
+from maily.aws import AWS
+from maily.logger import logger
 from botocore.config import Config
-from relay.config import AWS_REGION
+from maily.config import AWS_REGION
 from botocore.exceptions import ClientError
 
 

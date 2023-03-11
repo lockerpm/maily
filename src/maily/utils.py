@@ -4,15 +4,15 @@ import json
 import base64
 import jwcrypto.jwe
 import jwcrypto.jwk
-from relay import ROOT_PATH
+from maily import ROOT_PATH
 from jinja2 import Template
-from relay.logger import logger
+from maily.logger import logger
 from email.header import Header
 from email.utils import parseaddr
 from email.headerregistry import Address
 from tempfile import SpooledTemporaryFile
 from cryptography.hazmat.primitives import hashes
-from relay.config import RELAY_FROM_ADDRESS, RELAY_DOMAINS
+from maily.config import RELAY_FROM_ADDRESS, RELAY_DOMAINS
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from django.template.defaultfilters import linebreaksbr, urlize
 

@@ -1,12 +1,12 @@
 import botocore.exceptions
-from relay.aws import AWS
-from relay.logger import logger
+from maily.aws import AWS
+from maily.logger import logger
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
-from relay.locker_api import store_reply_record
+from maily.locker_api import store_reply_record
 from email.mime.application import MIMEApplication
-from relay.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
+from maily.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
 
 
 class SES(AWS):

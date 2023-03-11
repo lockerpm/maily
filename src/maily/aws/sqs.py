@@ -1,11 +1,11 @@
 import gc
 import time
 import shlex
-from relay.aws import *
-from relay.config import *
+from maily.aws import *
+from maily.config import *
 from codetiming import Timer
-from relay.logger import logger
-from relay.message import Message
+from maily.logger import logger
+from maily.message import Message
 from botocore.exceptions import ClientError
 
 

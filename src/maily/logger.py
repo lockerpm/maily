@@ -3,7 +3,7 @@ import socket
 import logging
 import requests
 import traceback
-from relay.config import SLACK_WEB_HOOK
+from maily.config import SLACK_WEB_HOOK
 
 NOTIFY_LEVEL_NUM = 100
 

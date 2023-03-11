@@ -1,8 +1,8 @@
 import time
 import requests
-from relay.logger import logger
-from relay.config import LOCKER_TOKEN_API
-from relay.utils import b64_lookup_key, get_message_id_bytes, derive_reply_keys, encrypt_reply_metadata
+from maily.logger import logger
+from maily.config import LOCKER_TOKEN_API
+from maily.utils import b64_lookup_key, get_message_id_bytes, derive_reply_keys, encrypt_reply_metadata
 
 ROOT_API = 'https://api.locker.io/v3/cystack_platform/relay/'
 HEADERS = {

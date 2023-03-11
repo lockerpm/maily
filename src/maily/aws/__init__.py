@@ -1,5 +1,5 @@
 import boto3
-from relay.config import AWS_REGION, AWS_SQS_URL
+from maily.config import AWS_REGION, AWS_SQS_URL
 
 
 class AWS:

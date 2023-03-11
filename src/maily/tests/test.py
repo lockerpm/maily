@@ -1,7 +1,7 @@
 import json
 
-from relay.aws.sqs import sqs_client
-from relay.domain_identity import DomainIdentity
+from maily.aws.sqs import sqs_client
+from maily.domain_identity import DomainIdentity
 
 action_msg = {
     'action': 'create',
