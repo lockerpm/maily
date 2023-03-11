@@ -1,4 +1,4 @@
-![Locker Password Manager](https://locker.io/_nuxt/img/email.9ad6b4f.png "Locker Password Manager")
+![Locker Password Manager](https://s.locker.io/assets/locker_private_email.png "Locker Password Manager")
 
 -------------------
 
