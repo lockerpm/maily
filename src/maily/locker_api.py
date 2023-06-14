@@ -14,8 +14,8 @@ def get_to_address(relay_address):
     """
     Connect to the Locker API to get the corresponding to_address with relay_address
     """
-    # The alias length must be greater than 5
-    if len(relay_address.split('@')[0]) < 6:
+    # The alias length must be greater than 4
+    if len(relay_address.split('@')[0]) < 4:
         return None
     url = f'{ROOT_API}destination?relay_address={relay_address}'
     while True:
