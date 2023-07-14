@@ -247,8 +247,11 @@ class Message:
         self.to_address = self.get_relay_recipient()
         if self.to_address is None:
             return self.response(400, "Address does not exist")
-
-        self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        try:
+            self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        except KeyError:
+            logger.error(f"[!] parseaddr KeyError: {self.mail_common_headers}")
+            raise
         if self.to_address == REPLY_EMAIL:
             return self.handle_reply()
 
