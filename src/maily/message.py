@@ -250,7 +250,9 @@ class Message:
         try:
             self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
         except KeyError:
-            logger.error(f"[!] parseaddr KeyError: {self.mail_common_headers}")
+            logger.error(f"[!] parseaddr KeyError: \n{self.mail_common_headers}\n{self.sns_message_type}\n"
+                         f"{self.sns_message}\n{self.sns_event_type}\n{self.sns_message_body}\n"
+                         f"{self.from_address}\n{self.to_address}")
             raise
         if self.to_address == REPLY_EMAIL:
             return self.handle_reply()
