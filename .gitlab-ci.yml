@@ -7,7 +7,7 @@ build:
   script:
     - cystack-deployer
   tags:
-    - cs_bot
+    - cs_newgen
   only:
     - main
     - tags
@@ -17,7 +17,7 @@ deploy:
   script:
     - cystack-deployer
   tags:
-    - cs_bot
+    - cs_newgen
   only:
     - main
     - tags
