@@ -1,20 +1,22 @@
+import base64
+import json
 import os
 import re
-import json
-import base64
+from email.header import Header
+from email.headerregistry import Address
+from email.utils import parseaddr
+from tempfile import SpooledTemporaryFile
+
 import jwcrypto.jwe
 import jwcrypto.jwk
-from maily import ROOT_PATH
-from jinja2 import Template
-from maily.logger import logger
-from email.header import Header
-from email.utils import parseaddr
-from email.headerregistry import Address
-from tempfile import SpooledTemporaryFile
 from cryptography.hazmat.primitives import hashes
-from maily.config import RELAY_FROM_ADDRESS, RELAY_DOMAINS
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
 from django.template.defaultfilters import linebreaksbr, urlize
+from jinja2 import Template
+
+from maily import ROOT_PATH
+from maily.config import RELAY_FROM_ADDRESS, RELAY_DOMAIN
+from maily.logger import logger
 
 
 def get_message_id_bytes(message_id_str):
@@ -95,9 +97,8 @@ def extract_email_from_string(email_string):
 
 def get_recipient_with_relay_domain(recipients):
     for recipient in recipients:
-        for domain in RELAY_DOMAINS:
-            if domain in recipient:
-                return recipient
+        if RELAY_DOMAIN in recipient:
+            return recipient
     return None
 
 

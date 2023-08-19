@@ -2,9 +2,9 @@ import os
 
 # General
 SLACK_WEB_HOOK = os.getenv('SLACK_WEB_HOOK')
-RELAY_DOMAINS = ["maily.org"]
-REPLY_EMAIL = "replies@maily.org"
-RELAY_FROM_ADDRESS = "relay@maily.org"
+RELAY_DOMAIN = "maily.org"
+REPLY_EMAIL = f"replies@{RELAY_DOMAIN}"
+RELAY_FROM_ADDRESS = f"relay@{RELAY_DOMAIN}"
 LOCKER_TOKEN_API = os.getenv('LOCKER_TOKEN_API')
 
 # AWS
