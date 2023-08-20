@@ -14,8 +14,8 @@ class DomainIdentity:
         The mail-from records will help sending emails marked as send from this mail-from domain instead of AWS domains
         """
         mail_from_domain = f'mail.{self.domain_name}'
-        self.create_dns_record('MX', f'*.{RELAY_DOMAIN}', f'feedback-smtp.{AWS_REGION}.amazonses.com', 10)
-        self.create_dns_record('TXT', f'*.{RELAY_DOMAIN}', '"v=spf1 include:amazonses.com ~all"')
+        self.create_dns_record('MX', mail_from_domain, f'feedback-smtp.{AWS_REGION}.amazonses.com', 10)
+        self.create_dns_record('TXT', '*', '"v=spf1 include:amazonses.com ~all"')
         return ses_client.set_identity_mail_from_domain(self.domain_name, mail_from_domain)
 
     def create_domain(self):
@@ -32,7 +32,7 @@ class DomainIdentity:
             self.create_dns_record('CNAME', record_key, record_value)
 
         # Add MX records to receive emails
-        self.create_dns_record('MX', f'*.{RELAY_DOMAIN}', f'inbound-smtp.{AWS_REGION}.amazonaws.com', 10)
+        self.create_dns_record('MX', self.domain_name, f'inbound-smtp.{AWS_REGION}.amazonaws.com', 10)
 
         # Set mail-from domain
         response = self.set_mail_from()
