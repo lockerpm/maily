@@ -73,6 +73,14 @@ class DomainIdentity:
             record_value = f'{token}.dkim.amazonses.com'
             self.delete_dns_record('CNAME', record_key, record_value)
 
+        # Remove MX records
+        self.delete_dns_record('MX', self.domain_name, f'inbound-smtp.{AWS_REGION}.amazonaws.com')
+
+        # Remove mail-from records
+        mail_from_domain = f'mail.{self.domain_name}'
+        self.delete_dns_record('MX', mail_from_domain, f'feedback-smtp.{AWS_REGION}.amazonses.com')
+        self.delete_dns_record('TXT', mail_from_domain, '"v=spf1 include:amazonses.com ~all"')
+
         # Remove domain identity in SES
         ses_client.delete_identity(self.domain_name)
 
