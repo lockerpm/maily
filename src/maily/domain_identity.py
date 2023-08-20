@@ -15,7 +15,7 @@ class DomainIdentity:
         """
         mail_from_domain = f'mail.{self.domain_name}'
         self.create_dns_record('MX', mail_from_domain, f'feedback-smtp.{AWS_REGION}.amazonses.com', 10)
-        self.create_dns_record('TXT', '*', '"v=spf1 include:amazonses.com ~all"')
+        self.create_dns_record('TXT', mail_from_domain, '"v=spf1 include:amazonses.com ~all"')
         return ses_client.set_identity_mail_from_domain(self.domain_name, mail_from_domain)
 
     def create_domain(self):
