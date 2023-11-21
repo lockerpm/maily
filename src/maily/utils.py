@@ -130,9 +130,11 @@ def get_all_contents_email(email_message):
             except KeyError:
                 # log the un-handled content type but don't stop processing
                 logger.error(f"part.get_content(). type:{part.get_content_type()}")
-            except LookupError:
+            except LookupError as e:
                 # log the un-handled content type but don't stop processing
-                logger.error(f"part.get_content() lookup error. type:{part.get_content_type()}\n{part}\n{email_message}")
+                logger.error(
+                    f"part.get_content() lookup error. type:{part.get_content_type()} - {e}\nPart is:::{part}"
+                )
         if text_content is not None and html_content is None:
             html_content = urlize_and_linebreaks(text_content)
     else:
