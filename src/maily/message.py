@@ -215,7 +215,8 @@ class Message:
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
             try:
                 message_content = s3_client.get_message_content_from_s3(bucket, object_key)
-                if len(message_content) > 10485760:
+                # Limit size is 25MB
+                if len(message_content) > 26214400:
                     return self.response(400, "Attachments are larger than AWS allows")
             except ClientError as e:
                 if e.response["Error"].get("Code", "") == "NoSuchKey":
