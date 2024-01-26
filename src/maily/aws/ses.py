@@ -12,7 +12,7 @@ from maily.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
 class SES(AWS):
     def __init__(self):
         super().__init__()
-        self.service = 'ses'
+        self.service = 'sesv2'
 
     @staticmethod
     def add_body_to_message(msg, message_body):
@@ -69,14 +69,27 @@ class SES(AWS):
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
         try:
-            ses_response = self.client.send_raw_email(
-                Source=from_address,
-                Destinations=[to_address],
-                RawMessage={
-                    "Data": msg_with_attachments.as_string(),
+            ses_response = self.client.send_email(
+                FromEmailAddress=from_address,
+                Destination={
+                    "ToAddresses": [to_address]
+                },
+                Content={
+                    "Raw": {
+                        "Data": msg_with_attachments.as_string(),
+                    }
                 },
                 ConfigurationSetName=AWS_SES_CONFIG_SET,
             )
+            # -------- (SES v1 DEPRECATED) -------------- #
+            # ses_response = self.client.send_raw_email(
+            #     Source=from_address,
+            #     Destinations=[to_address],
+            #     RawMessage={
+            #         "Data": msg_with_attachments.as_string(),
+            #     },
+            #     ConfigurationSetName=AWS_SES_CONFIG_SET,
+            # )
 
             store_reply_record(mail, ses_response)
         except ClientError as e:

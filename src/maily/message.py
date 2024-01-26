@@ -222,7 +222,7 @@ class Message:
                 if e.response["Error"].get("Code", "") == "NoSuchKey":
                     logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
                     return self.response(404, "Email not in S3")
-                logger.error('s3_client_error_get_email: {e.response["Error"]}')
+                logger.error(f's3_client_error_get_email: {e.response["Error"]}')
                 # we are returning a 500 so that SNS can retry the email processing
                 return self.response(503, "Cannot fetch the message content from S3")
         else:
