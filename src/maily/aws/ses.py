@@ -70,7 +70,7 @@ class SES(AWS):
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
         try:
-            sesv2_client = boto3.client(self.service, config=self.config, region_name=AWS_REGION)
+            sesv2_client = boto3.client('sesv2', config=self.config, region_name=AWS_REGION)
             ses_response = sesv2_client.send_email(
                 FromEmailAddress=from_address,
                 Destination={
