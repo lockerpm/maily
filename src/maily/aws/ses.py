@@ -1,3 +1,4 @@
+import boto3
 import botocore.exceptions
 from maily.aws import AWS
 from maily.logger import logger
@@ -6,13 +7,13 @@ from botocore.exceptions import ClientError
 from email.mime.multipart import MIMEMultipart
 from maily.locker_api import store_reply_record
 from email.mime.application import MIMEApplication
-from maily.config import AWS_SES_CONFIG_SET, REPLY_EMAIL
+from maily.config import AWS_SES_CONFIG_SET, REPLY_EMAIL, AWS_REGION
 
 
 class SES(AWS):
     def __init__(self):
         super().__init__()
-        self.service = 'sesv2'
+        self.service = 'ses'
 
     @staticmethod
     def add_body_to_message(msg, message_body):
@@ -69,7 +70,8 @@ class SES(AWS):
         msg_with_body = self.add_body_to_message(msg_with_headers, message_body)
         msg_with_attachments = self.add_attachments_to_message(msg_with_body, attachments)
         try:
-            ses_response = self.client.send_email(
+            sesv2_client = boto3.client(self.service, config=self.config, region_name=AWS_REGION)
+            ses_response = sesv2_client.send_email(
                 FromEmailAddress=from_address,
                 Destination={
                     "ToAddresses": [to_address]
