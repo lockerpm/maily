@@ -131,7 +131,8 @@ def get_all_contents_email(email_message):
                 # log the un-handled content type but don't stop processing
                 logger.error(f"part.get_content(). type:{part.get_content_type()}")
             except LookupError as e:
-                # log the un-handled content type but don't stop processing
+                # log the un-handled content type but don't stop processing:
+                # LookupError: unknown encoding: charset=us-ascii
                 logger.error(
                     f"part.get_content() lookup error. type:{part.get_content_type()} - {e}\nPart is:::{part}"
                 )
