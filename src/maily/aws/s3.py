@@ -1,8 +1,10 @@
+import time
+
 from maily.aws import AWS
 from maily.logger import logger
 from botocore.config import Config
 from maily.config import AWS_REGION
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ReadTimeoutError
 
 
 class S3(AWS):
@@ -19,8 +21,16 @@ class S3(AWS):
 
     def get_message_content_from_s3(self, bucket, object_key):
         if bucket and object_key:
-            streamed_s3_object = self.client.get_object(Bucket=bucket, Key=object_key).get("Body")
-            return streamed_s3_object.read()
+            tries = 0
+            while True:
+                try:
+                    streamed_s3_object = self.client.get_object(Bucket=bucket, Key=object_key).get("Body")
+                    return streamed_s3_object.read()
+                except ReadTimeoutError:
+                    tries += 1
+                    if tries > 5:
+                        raise
+                    time.sleep(3)
 
     def remove_message_from_s3(self, bucket, object_key):
         if bucket is None or object_key is None:
