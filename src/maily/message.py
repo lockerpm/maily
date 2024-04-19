@@ -142,10 +142,7 @@ class Message:
         try:
             outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
         except AttributeError:
-            logger.error(
-                f"[!] Cannot get outbound_from_address:::{decrypted_metadata} - {lookup_key} - {encryption_key}"
-            )
-            return self.response(400, "Cannot get outbound_from_address")
+            return self.response(400, f"Cannot get outbound_from_address from decrypted metadata {decrypted_metadata}")
 
         if not reply_allowed(self.from_address, self.to_address):
             return self.response(403, "Relay replies require a premium account")
