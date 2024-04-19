@@ -139,7 +139,14 @@ class Message:
         self.to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
         self.to_address = extract_email_from_string(self.to_address)
 
-        outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
+        try:
+            outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
+        except AttributeError:
+            logger.error(
+                f"[!] Cannot get outbound_from_address:::{decrypted_metadata} - {lookup_key} - {encryption_key}"
+            )
+            return self.response(400, "Cannot get outbound_from_address")
+
         if not reply_allowed(self.from_address, self.to_address):
             return self.response(403, "Relay replies require a premium account")
         mail_content = self.get_text_html_attachments()
