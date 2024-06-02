@@ -95,9 +95,9 @@ class SES(AWS):
 
             store_reply_record(mail, ses_response)
         except ClientError as e:
-            logger.error(f'[!] ses_client_error_raw_email:{e.response["Error"]}')
-            logger.error(
-                f'from_address: {from_address}\nto_address: {to_address}\ndata: {msg_with_attachments.as_string()}')
+            logger.error(f'[!] ses_client_error_raw_email:::{e.response["Error"]}')
+            # logger.error(
+            #     f'from_address: {from_address}\nto_address: {to_address}\ndata: {msg_with_attachments.as_string()}')
             return False
         return True
 
