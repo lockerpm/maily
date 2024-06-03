@@ -1,3 +1,4 @@
+import botocore
 import pem
 import html
 import shlex
@@ -228,6 +229,8 @@ class Message:
                     return self.response(404, "Email not in S3")
                 logger.error(f's3_client_error_get_email: {e.response["Error"]}')
                 # we are returning a 500 so that SNS can retry the email processing
+                return self.response(503, "Cannot fetch the message content from S3")
+            except botocore.exceptions.ConnectionClosedError:
                 return self.response(503, "Cannot fetch the message content from S3")
         else:
             message_content = self.sns_message_content
