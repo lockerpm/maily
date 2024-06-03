@@ -9,7 +9,7 @@ from maily.logger import logger
 from urllib.request import urlopen
 from maily.aws.s3 import s3_client
 from maily.aws.ses import ses_client
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionClosedError, SSLError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
 from maily.exceptions import InReplyToNotFound
@@ -234,7 +234,7 @@ class Message:
                 # we are returning a 500 so that SNS can retry the email processing
                 # return self.response(503, "Cannot fetch the message content from S3")
                 return self.response(504, "Fetch message from S3 error - boto3.ClientError")
-            except botocore.exceptions.ConnectionClosedError:
+            except (ConnectionClosedError, SSLError):
                 return self.response(504, "Fetch message from S3 error - boto3.ConnectionClosedError")
         else:
             message_content = self.sns_message_content
