@@ -95,13 +95,16 @@ class SES(AWS):
 
             store_reply_record(mail, ses_response)
         except ClientError as e:
-            # logger.error(f'[!] ses_client_error_raw_email:::{e.response["Error"]}')
+            # Handel SES HTTP error: https://docs.aws.amazon.com/ses/latest/APIReference-V2/CommonErrors.html
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code in ["500", "408", "503"]:
+                return None
+            logger.error(f'[!] ses_client_error_raw_email:::{e.response["Error"]}')
             # logger.error(
             #     f'from_address: {from_address}\nto_address: {to_address}\ndata: {msg_with_attachments.as_string()}')
             return False
         except botocore.exceptions.ConnectionClosedError:
-            # TODO: Handle timeout
-            return False
+            return None
         return True
 
     def list_identities(self):

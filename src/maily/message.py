@@ -209,10 +209,13 @@ class Message:
                         reply_address=REPLY_EMAIL):
         response = ses_client.ses_send_raw_email(from_address, to_address, subject,
                                                  message_body, attachments, mail, reply_address)
-        if response:
-            return self.response(200, "Sent email to final recipient")
-        else:
+        # Need to retry
+        if response is None:
+            return self.response(504, "SES client sent Raw Email failed. It needs to be re-sent")
+        if response is False:
             return self.response(503, "SES client error on Raw Email")
+        return self.response(200, "Sent email to final recipient")
+
 
     def get_text_html_attachments(self):
         if self.sns_message_content is None:
@@ -229,9 +232,10 @@ class Message:
                     return self.response(404, "Email not in S3")
                 logger.error(f's3_client_error_get_email: {e.response["Error"]}')
                 # we are returning a 500 so that SNS can retry the email processing
-                return self.response(503, "Cannot fetch the message content from S3")
+                # return self.response(503, "Cannot fetch the message content from S3")
+                return self.response(504, "Fetch message from S3 error - boto3.ClientError")
             except botocore.exceptions.ConnectionClosedError:
-                return self.response(503, "Cannot fetch the message content from S3")
+                return self.response(504, "Fetch message from S3 error - boto3.ConnectionClosedError")
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)

@@ -100,6 +100,9 @@ class SQS(AWS):
                 # Handle domain identity failed
                 if details['status_code'] in [511]:
                     results.update({"success": False})
+                # Handle AWS service timeout
+                elif details['status_code'] in [504]:
+                    results.update({"success": False})
             else:
                 results['details']['sent_success'] = True
         return results
