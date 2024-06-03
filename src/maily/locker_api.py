@@ -54,8 +54,15 @@ def store_reply_record(mail, ses_response):
     payload = {"lookup": lookup, "encrypted_metadata": encrypted_metadata}
     # Request to API to store payload
     url = f'{ROOT_API}reply'
-    r = requests.post(url=url, json=payload, headers=HEADERS)
-
+    # Handle store reply record failed
+    retry = 0
+    while retry <= 5:
+        try:
+            requests.post(url=url, json=payload, headers=HEADERS)
+            return True
+        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+            retry += 1
+    return False
 
 def reply_allowed(from_address, to_address):
     """

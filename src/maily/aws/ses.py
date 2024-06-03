@@ -3,7 +3,7 @@ import botocore.exceptions
 from maily.aws import AWS
 from maily.logger import logger
 from email.mime.text import MIMEText
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionClosedError
 from email.mime.multipart import MIMEMultipart
 from maily.locker_api import store_reply_record
 from email.mime.application import MIMEApplication
@@ -93,7 +93,9 @@ class SES(AWS):
             #     ConfigurationSetName=AWS_SES_CONFIG_SET,
             # )
 
-            store_reply_record(mail, ses_response)
+            stored = store_reply_record(mail, ses_response)
+            if not stored:
+                logger.error(f"[!] Store reply record error. Please check the Locker Reply API")
         except ClientError as e:
             # Handel SES HTTP error: https://docs.aws.amazon.com/ses/latest/APIReference-V2/CommonErrors.html
             error_code = e.response.get("Error", {}).get("Code")
@@ -103,7 +105,7 @@ class SES(AWS):
             # logger.error(
             #     f'from_address: {from_address}\nto_address: {to_address}\ndata: {msg_with_attachments.as_string()}')
             return False
-        except botocore.exceptions.ConnectionClosedError:
+        except ConnectionClosedError:
             return None
         return True
 
