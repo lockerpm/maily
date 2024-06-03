@@ -3,7 +3,7 @@ import botocore.exceptions
 from maily.aws import AWS
 from maily.logger import logger
 from email.mime.text import MIMEText
-from botocore.exceptions import ClientError, ConnectionClosedError
+from botocore.exceptions import ClientError, ConnectionClosedError, SSLError
 from email.mime.multipart import MIMEMultipart
 from maily.locker_api import store_reply_record
 from email.mime.application import MIMEApplication
@@ -105,7 +105,7 @@ class SES(AWS):
             # logger.error(
             #     f'from_address: {from_address}\nto_address: {to_address}\ndata: {msg_with_attachments.as_string()}')
             return False
-        except ConnectionClosedError:
+        except (ConnectionClosedError, SSLError):
             return None
         return True
 
