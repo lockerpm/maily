@@ -141,7 +141,7 @@ class Message:
         try:
             self.to_address = extract_email_from_string(self.to_address)
         except AttributeError:
-            return self.response(400, f"Cannot parse to_address from {self.to_address}")
+            return self.response(400, f"Cannot parse to_address from {decrypted_metadata}")
 
         try:
             outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
