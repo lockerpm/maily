@@ -138,7 +138,10 @@ class Message:
         decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
         self.to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
-        self.to_address = extract_email_from_string(self.to_address)
+        try:
+            self.to_address = extract_email_from_string(self.to_address)
+        except AttributeError:
+            return self.response(400, f"Cannot parse to_address from {self.to_address}")
 
         try:
             outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
