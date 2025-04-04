@@ -1,8 +1,9 @@
 import time
 import requests
+
+from maily.aws.ses import ses_client
 from maily.config import *
 from maily.logger import logger
-from maily.aws.ses import ses_client
 
 
 class DomainIdentity:
@@ -11,10 +12,10 @@ class DomainIdentity:
 
     def set_mail_from(self):
         """
-        The mail-from records will helps sending emails marked as send from this mail-from domain instead of AWS domains
+        The mail-from records will help sending emails marked as send from this mail-from domain instead of AWS domains
         """
         mail_from_domain = f'mail.{self.domain_name}'
-        self.create_dns_record('MX', mail_from_domain, 'feedback-smtp.us-east-1.amazonses.com', 10)
+        self.create_dns_record('MX', mail_from_domain, f'feedback-smtp.{AWS_REGION}.amazonses.com', 10)
         self.create_dns_record('TXT', mail_from_domain, '"v=spf1 include:amazonses.com ~all"')
         return ses_client.set_identity_mail_from_domain(self.domain_name, mail_from_domain)
 
@@ -22,7 +23,7 @@ class DomainIdentity:
         """
         Add a domain to authenticated list in AWS SES
         """
-        if not any(self.domain_name.endswith(f'{d}') for d in RELAY_DOMAINS):
+        if not self.domain_name.endswith(RELAY_DOMAIN):
             return False
         # Add DKIM records to verify
         dkim_tokens = ses_client.get_dkim_tokens(self.domain_name)
@@ -104,10 +105,10 @@ class DomainIdentity:
 
         # Remove mail-from records
         mail_from_domain = f'mail.{self.domain_name}'
-        self.delete_dns_record('MX', mail_from_domain, 'feedback-smtp.us-east-1.amazonses.com')
+        self.delete_dns_record('MX', mail_from_domain, f'feedback-smtp.{AWS_REGION}.amazonses.com')
         self.delete_dns_record('TXT', mail_from_domain, '"v=spf1 include:amazonses.com ~all"')
 
         # Remove domain identity in SES
-        response = ses_client.delete_identity(self.domain_name)
+        ses_client.delete_identity(self.domain_name)
 
         return True

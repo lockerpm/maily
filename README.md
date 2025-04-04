@@ -45,16 +45,16 @@ including S3, SES, and SQS.
 4. Set environment variables Maily requires a list of variables defined in [the config file](/src/maily/config.py). You
    should set the following variables:
 
-   | **Variable**       | **Description**                                                                                                             | **Example**       |
-      |--------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------|
-   | RELAY_DOMAINS      | A list of relay domains                                                                                                     | [ "maily.org"]    |
-   | REPLY_EMAIL        | The email used for replying                                                                                                 | replies@maily.org |
-   | RELAY_FROM_ADDRESS | The relay email address                                                                                                     | relay@maily.org   |
-   | LOCKER_TOKEN_API   | The token to authenticate with the Locker server. You should implement your own backend server to serve requests from Maily |                   |
-   | AWS_REGION         | The default region of AWS S3                                                                                                | us‑east‑1          |
-   | AWS_SES_CONFIG_SET | Maily uses AWS SES to send emails, so you have configure the configure set in SES                                           |                   |
-   | AWS_SNS_TOPIC      | The SNS topic of AWS for getting new notifications                                                                          |                   |
-   | AWS_SQS_URL        | The SQS URL of AWS for getting tasks from the queue                                                                         |                   |
+   | **Variable**      | **Description**                                                                                                             | **Example**  |
+      |-------------------|-----------------------------------------------------------------------------------------------------------------------------|--------------|
+   | RELAY_DOMAIN      | The relay domain                                                                                                           | maily.org    |
+   | REPLY_EMAIL       | The email used for replying                                                                                                 | replies@maily.org |
+   | RELAY_FROM_ADDRESS | The relay email address                                                                                                     | relay@maily.org |
+   | LOCKER_TOKEN_API  | The token to authenticate with the Locker server. You should implement your own backend server to serve requests from Maily |              |
+   | AWS_REGION        | The default region of AWS S3                                                                                                | us‑east‑1     |
+   | AWS_SES_CONFIG_SET | Maily uses AWS SES to send emails, so you have configure the configure set in SES                                           |              |
+   | AWS_SNS_TOPIC     | The SNS topic of AWS for getting new notifications                                                                          |              |
+   | AWS_SQS_URL       | The SQS URL of AWS for getting tasks from the queue                                                                         |              |
 
 
    The variables can be set by the command `export NAME=VALUE`

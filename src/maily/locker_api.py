@@ -14,8 +14,8 @@ def get_to_address(relay_address):
     """
     Connect to the Locker API to get the corresponding to_address with relay_address
     """
-    # The alias length must be greater than 4
-    if len(relay_address.split('@')[0]) < 4:
+    # The alias length must be greater than 5
+    if len(relay_address.split('@')[0]) < 6:
         return None
     url = f'{ROOT_API}destination?relay_address={relay_address}'
     while True:
@@ -54,8 +54,15 @@ def store_reply_record(mail, ses_response):
     payload = {"lookup": lookup, "encrypted_metadata": encrypted_metadata}
     # Request to API to store payload
     url = f'{ROOT_API}reply'
-    r = requests.post(url=url, json=payload, headers=HEADERS)
-
+    # Handle store reply record failed
+    retry = 0
+    while retry <= 5:
+        try:
+            requests.post(url=url, json=payload, headers=HEADERS)
+            return True
+        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+            retry += 1
+    return False
 
 def reply_allowed(from_address, to_address):
     """

@@ -1,3 +1,4 @@
+import botocore
 import pem
 import html
 import shlex
@@ -8,7 +9,7 @@ from maily.logger import logger
 from urllib.request import urlopen
 from maily.aws.s3 import s3_client
 from maily.aws.ses import ses_client
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ConnectionClosedError, SSLError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
 from maily.exceptions import InReplyToNotFound
@@ -137,9 +138,16 @@ class Message:
         decrypted_metadata = json.loads(decrypt_reply_metadata(encryption_key, reply_record['encrypted_metadata']))
         subject = self.mail_common_headers.get("subject", "")
         self.to_address = decrypted_metadata.get("reply-to") or decrypted_metadata.get("from")
-        self.to_address = extract_email_from_string(self.to_address)
+        try:
+            self.to_address = extract_email_from_string(self.to_address)
+        except AttributeError:
+            return self.response(400, f"Cannot parse to_address from {decrypted_metadata}")
 
-        outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
+        try:
+            outbound_from_address = decrypted_metadata.get("to").split(',')[0].strip()
+        except AttributeError:
+            return self.response(400, f"Cannot get outbound_from_address from decrypted metadata {decrypted_metadata}")
+
         if not reply_allowed(self.from_address, self.to_address):
             return self.response(403, "Relay replies require a premium account")
         mail_content = self.get_text_html_attachments()
@@ -204,10 +212,13 @@ class Message:
                         reply_address=REPLY_EMAIL):
         response = ses_client.ses_send_raw_email(from_address, to_address, subject,
                                                  message_body, attachments, mail, reply_address)
-        if response:
-            return self.response(200, "Sent email to final recipient")
-        else:
+        # Need to retry
+        if response is None:
+            return self.response(504, "SES client sent Raw Email failed. It needs to be re-sent")
+        if response is False:
             return self.response(503, "SES client error on Raw Email")
+        return self.response(200, "Sent email to final recipient")
+
 
     def get_text_html_attachments(self):
         if self.sns_message_content is None:
@@ -215,15 +226,19 @@ class Message:
             bucket, object_key = self.get_bucket_and_key_from_s3_json()
             try:
                 message_content = s3_client.get_message_content_from_s3(bucket, object_key)
-                if len(message_content) > 10485760:
+                # Limit size is 25MB
+                if len(message_content) > 26214400:
                     return self.response(400, "Attachments are larger than AWS allows")
             except ClientError as e:
                 if e.response["Error"].get("Code", "") == "NoSuchKey":
                     logger.error(f's3_object_does_not_exist: {e.response["Error"]}')
                     return self.response(404, "Email not in S3")
-                logger.error('s3_client_error_get_email: {e.response["Error"]}')
+                logger.error(f's3_client_error_get_email: {e.response["Error"]}')
                 # we are returning a 500 so that SNS can retry the email processing
-                return self.response(503, "Cannot fetch the message content from S3")
+                # return self.response(503, "Cannot fetch the message content from S3")
+                return self.response(504, "Fetch message from S3 error - boto3.ClientError")
+            except (ConnectionClosedError, SSLError):
+                return self.response(504, "Fetch message from S3 error - boto3.ConnectionClosedError")
         else:
             message_content = self.sns_message_content
         bytes_email_message = message_from_bytes(message_content, policy=policy.default)
@@ -247,8 +262,10 @@ class Message:
         self.to_address = self.get_relay_recipient()
         if self.to_address is None:
             return self.response(400, "Address does not exist")
-
-        self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        try:
+            self.from_address = parseaddr(self.mail_common_headers["from"][0])[1]
+        except KeyError:
+            return self.response(400, f"Not found 'from' from mail common header {self.mail_common_headers}")
         if self.to_address == REPLY_EMAIL:
             return self.handle_reply()
 
