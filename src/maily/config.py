@@ -32,3 +32,6 @@ CF_ZONE = os.getenv('CF_ZONE')
 CF_TOKEN = os.getenv('CF_TOKEN')
 CF_HEADERS = {'Authorization': f'Bearer {CF_TOKEN}'}
 CF_API = f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE}/dns_records'
+
+# AWS Route53
+AWS_ROUTE53_HOSTED_ZONE_ID = os.getenv('AWS_ROUTE53_HOSTED_ZONE_ID')

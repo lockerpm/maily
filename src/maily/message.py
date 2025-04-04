@@ -3,6 +3,8 @@ import pem
 import html
 import shlex
 import OpenSSL
+
+from maily.route53_domain_identity import Route53DomainIdentity
 from maily.utils import *
 from OpenSSL import crypto
 from maily.logger import logger
@@ -398,7 +400,8 @@ class Message:
     def handle_domain_identity(self):
         action = self.sns_message_body['action']
         domain = self.sns_message_body['domain']
-        identity = DomainIdentity(domain)
+        identity = Route53DomainIdentity(domain)
+
         if action == 'create':
             if identity.create_domain():
                 return self.response(200, f'Created domain {domain} successfully')
