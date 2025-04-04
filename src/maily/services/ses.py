@@ -1,6 +1,6 @@
 import boto3
 import botocore.exceptions
-from maily.aws import AWS
+from maily.services import AWS
 from maily.logger import logger
 from email.mime.text import MIMEText
 from botocore.exceptions import ClientError, ConnectionClosedError, SSLError

@@ -1,7 +1,7 @@
 import gc
 import time
 import shlex
-from maily.aws import *
+from maily.services import *
 from maily.config import *
 from codetiming import Timer
 from maily.logger import logger

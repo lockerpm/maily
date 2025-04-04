@@ -1,8 +1,7 @@
 import json
 
-from maily.aws.sqs import sqs_client
+from maily.services.sqs import sqs_client
 from maily.domain_identity import DomainIdentity
-from maily.route53_domain_identity import Route53DomainIdentity
 
 # action_msg = {
 #     'action': 'create',
@@ -15,6 +14,7 @@ from maily.route53_domain_identity import Route53DomainIdentity
 # }
 # sqs_client.send_message(json.dumps(msg))
 
-x = Route53DomainIdentity('manh123.manhtx.site')
+x = DomainIdentity('trungnh.manhtx.site')
 # x.create_domain()
-x.create_domain()
+y = x.delete_domain()
+# print(y)

@@ -1,6 +1,6 @@
 import time
 
-from maily.aws import AWS
+from maily.services import AWS
 from maily.logger import logger
 from botocore.config import Config
 from maily.config import AWS_REGION

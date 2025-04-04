@@ -4,13 +4,12 @@ import html
 import shlex
 import OpenSSL
 
-from maily.route53_domain_identity import Route53DomainIdentity
 from maily.utils import *
 from OpenSSL import crypto
 from maily.logger import logger
 from urllib.request import urlopen
-from maily.aws.s3 import s3_client
-from maily.aws.ses import ses_client
+from maily.services.s3 import s3_client
+from maily.services.ses import ses_client
 from botocore.exceptions import ClientError, ConnectionClosedError, SSLError
 from email import message_from_bytes, policy
 from django.utils.encoding import smart_bytes
@@ -221,7 +220,6 @@ class Message:
             return self.response(503, "SES client error on Raw Email")
         return self.response(200, "Sent email to final recipient")
 
-
     def get_text_html_attachments(self):
         if self.sns_message_content is None:
             # assume email content in S3
@@ -285,7 +283,8 @@ class Message:
             # Check spam
             if get_verdict(self.sns_receipt, "spam") == "FAIL" and enable_block_spam is True:
                 # Tracking block spam event
-                statistic_result = send_statistic_relay_address(relay_address=self.to_address, statistic_type="block_spam")
+                statistic_result = send_statistic_relay_address(relay_address=self.to_address,
+                                                                statistic_type="block_spam")
                 if statistic_result is False:
                     logger.warning(f"[!] Sending the block spam statistic data to {self.to_address} failed")
                 return self.response(400, "Address rejects spam")
@@ -400,7 +399,7 @@ class Message:
     def handle_domain_identity(self):
         action = self.sns_message_body['action']
         domain = self.sns_message_body['domain']
-        identity = Route53DomainIdentity(domain)
+        identity = DomainIdentity(domain)
 
         if action == 'create':
             if identity.create_domain():
