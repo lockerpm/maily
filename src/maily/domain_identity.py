@@ -1,3 +1,4 @@
+import time
 import requests
 from maily.config import *
 from maily.logger import logger
@@ -45,9 +46,22 @@ class DomainIdentity:
         payload = {"type": record_type, "name": record_key, "content": record_value}
         if priority:
             payload["priority"] = priority
-        r = requests.post(CF_API, headers=CF_HEADERS, json=payload)
-        logger.info(f'[+] Created record {record_type} {record_key} {record_value}')
-        return r
+
+        retry = 0
+        while retry <= 5:
+            try:
+                r = requests.post(CF_API, headers=CF_HEADERS, json=payload)
+                if r.status_code >= 500:
+                    retry += 1
+                    time.sleep(1)
+                    continue
+                else:
+                    logger.info(f'[+] Created record {record_type} {record_key} {record_value}')
+                    return r
+            except (requests.exceptions.RequestException, requests.exceptions.ConnectTimeout):
+                retry += 1
+                time.sleep(1)
+        logger.error(f'[+] Created DNS record error {record_type} {record_key} {record_value}')
 
     @staticmethod
     def delete_dns_record(record_type, record_key, record_value):
@@ -58,8 +72,21 @@ class DomainIdentity:
         r = requests.get(url, headers=CF_HEADERS)
         for record in r.json()['result']:
             url = f'{CF_API}/{record["id"]}'
-            requests.delete(url, headers=CF_HEADERS)
-            logger.info(f'[+] Deleted record {record_type} {record_key} {record_value}')
+            retry = 0
+            while retry <= 5:
+                try:
+                    r = requests.delete(url, headers=CF_HEADERS)
+                    if r.status_code >= 500:
+                        retry += 1
+                        time.sleep(1)
+                        continue
+                    else:
+                        logger.info(f'[+] Deleted record {record_type} {record_key} {record_value}')
+                        return
+                except (requests.exceptions.RequestException, requests.exceptions.ConnectTimeout):
+                    retry += 1
+                    time.sleep(1)
+            logger.error(f'[+] Deleted DNS record error {record_type} {record_key} {record_value}')
 
     def delete_domain(self):
         """
