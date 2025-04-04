@@ -53,11 +53,14 @@ class DomainIdentity:
             try:
                 r = requests.post(CF_API, headers=CF_HEADERS, json=payload)
                 if r.status_code >= 500:
+                    logger.warning(f'[+] Created record 5xx {record_type} {record_key} {record_value} => '
+                                   f'{r.status_code} - {r.text}')
                     retry += 1
                     time.sleep(1)
                     continue
                 else:
-                    logger.info(f'[+] Created record {record_type} {record_key} {record_value}')
+                    logger.info(f'[+] Created record {record_type} {record_key} {record_value} => '
+                                f'{r.status_code} - {r.text}')
                     return r
             except (requests.exceptions.RequestException, requests.exceptions.ConnectTimeout):
                 retry += 1
@@ -78,11 +81,14 @@ class DomainIdentity:
                 try:
                     r = requests.delete(url, headers=CF_HEADERS)
                     if r.status_code >= 500:
+                        logger.warning(f'[+] Delete record 5xx {record_type} {record_key} {record_value} => '
+                                       f'{r.status_code} - {r.text}')
                         retry += 1
                         time.sleep(1)
                         continue
                     else:
-                        logger.info(f'[+] Deleted record {record_type} {record_key} {record_value}')
+                        logger.info(f'[+] Deleted record {record_type} {record_key} {record_value} => '
+                                    f'{r.status_code} - {r.text}')
                         return
                 except (requests.exceptions.RequestException, requests.exceptions.ConnectTimeout):
                     retry += 1
