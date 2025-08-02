@@ -18,15 +18,19 @@ def get_to_address(relay_address):
     if len(relay_address.split('@')[0]) < 6:
         return None
     url = f'{ROOT_API}destination?relay_address={relay_address}'
-    while True:
+    retry = 1
+    while retry <= 3:
         try:
-            r = requests.get(url, headers=HEADERS).json()
+            r = requests.get(url, headers=HEADERS, timeout=10).json()
             return r['destination']
         except KeyError:
             return None
         except:
             logger.info('[!] Could not get the relay address since requesting to Locker API unsuccessfully')
-            time.sleep(15)
+            time.sleep(10)
+            retry += 1
+    logger.error(f'[!] Could not get to_address of #{relay_address} since requesting to Locker API unsuccessfully')
+    return None
 
 
 def get_reply_record_from_lookup_key(lookup_key):
