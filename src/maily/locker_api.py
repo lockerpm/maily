@@ -37,7 +37,7 @@ def get_reply_record_from_lookup_key(lookup_key):
     lookup = b64_lookup_key(lookup_key)
     url = f'{ROOT_API}reply?lookup={lookup}'
     try:
-        r = requests.get(url, headers=HEADERS).json()
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
         if r.get('encrypted_metadata') is not None:
             return r
     except:
@@ -62,7 +62,7 @@ def store_reply_record(mail, ses_response):
     retry = 0
     while retry <= 5:
         try:
-            requests.post(url=url, json=payload, headers=HEADERS)
+            requests.post(url=url, json=payload, headers=HEADERS, timeout=10)
             return True
         except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
             retry += 1
@@ -85,9 +85,9 @@ def check_user_premium(email):
     """
     url = f'{ROOT_API}plan?email={email}'
     try:
-        r = requests.get(url, headers=HEADERS).json()
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
         return r["is_premium"]
-    except (requests.exceptions.ConnectionError, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
         return False
 
 
@@ -101,9 +101,9 @@ def get_relay_address_plan(relay_address):
     """
     url = f'{ROOT_API}plan?relay_address={relay_address}'
     try:
-        r = requests.get(url, headers=HEADERS).json()
+        r = requests.get(url, headers=HEADERS, timeout=10).json()
         return r
-    except (requests.exceptions.ConnectionError, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
         return {}
 
 
@@ -115,9 +115,9 @@ def send_statistic_relay_address(relay_address, statistic_type):
     assert statistic_type in ["forwarded", "block_spam"]
     data_send = {"relay_address": relay_address, "type": statistic_type}
     try:
-        r = requests.post(url, headers=HEADERS, json=data_send)
+        r = requests.post(url, headers=HEADERS, json=data_send, timeout=10)
         if r.status_code >= 400:
             return False
         return True
-    except (requests.exceptions.ConnectionError, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
         return False
