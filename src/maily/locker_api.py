@@ -64,7 +64,9 @@ def store_reply_record(mail, ses_response):
         try:
             requests.post(url=url, json=payload, headers=HEADERS, timeout=10)
             return True
-        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+        except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.Timeout,
+                KeyError):
+            time.sleep(10)
             retry += 1
     return False
 
@@ -87,7 +89,8 @@ def check_user_premium(email):
     try:
         r = requests.get(url, headers=HEADERS, timeout=10).json()
         return r["is_premium"]
-    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.Timeout,
+            KeyError):
         return False
 
 
@@ -103,7 +106,8 @@ def get_relay_address_plan(relay_address):
     try:
         r = requests.get(url, headers=HEADERS, timeout=10).json()
         return r
-    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.Timeout,
+            KeyError):
         return {}
 
 
@@ -119,5 +123,6 @@ def send_statistic_relay_address(relay_address, statistic_type):
         if r.status_code >= 400:
             return False
         return True
-    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, KeyError):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.Timeout,
+            KeyError):
         return False
