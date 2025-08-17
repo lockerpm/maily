@@ -107,6 +107,8 @@ class SES(AWS):
             return False
         except (ConnectionClosedError, SSLError):
             return None
+        except:
+            return None
         return True
 
     def list_identities(self):
