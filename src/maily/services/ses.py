@@ -61,7 +61,9 @@ class SES(AWS):
         # Create a multipart/mixed parent container.
         msg = MIMEMultipart("mixed")
         # Add subject, from and to lines.
-        msg["Subject"] = subject
+        # Sanitize the subject to remove newlines and other problematic characters
+        clean_subject = subject.replace('\n', ' ').replace('\r', ' ').strip()
+        msg["Subject"] = clean_subject
         msg["From"] = from_address
         msg["To"] = to_address
         msg["Reply-To"] = reply_address
@@ -110,10 +112,9 @@ class SES(AWS):
             return False
         except (ConnectionClosedError, SSLError):
             return None
-        # TODO: Handle email.errors.HeaderWriteError: folded header contains newline
-
-        except email.errors.MessageError:
-            return False
+        # # Handle email.errors.HeaderWriteError: folded header contains newline
+        # except email.errors.MessageError:
+        #     return False
         return True
 
     def list_identities(self):
