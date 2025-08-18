@@ -1,3 +1,5 @@
+import email.errors
+
 import boto3
 import botocore.exceptions
 from maily.services import AWS
@@ -8,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from maily.locker_api import store_reply_record
 from email.mime.application import MIMEApplication
 from maily.config import AWS_SES_CONFIG_SET, REPLY_EMAIL, AWS_REGION
+
 
 
 class SES(AWS):
@@ -107,7 +110,8 @@ class SES(AWS):
             return False
         except (ConnectionClosedError, SSLError):
             return None
-        except:
+        # TODO: Handle email.errors.HeaderWriteError: folded header contains newline
+        except email.errors.HeaderParseError:
             return None
         return True
 
