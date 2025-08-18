@@ -111,8 +111,9 @@ class SES(AWS):
         except (ConnectionClosedError, SSLError):
             return None
         # TODO: Handle email.errors.HeaderWriteError: folded header contains newline
-        except email.errors.HeaderParseError:
-            return None
+
+        except email.errors.MessageError:
+            return False
         return True
 
     def list_identities(self):
