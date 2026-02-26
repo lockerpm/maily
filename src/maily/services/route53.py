@@ -37,7 +37,7 @@ class Route53(AWS):
                 HostedZoneId=AWS_ROUTE53_HOSTED_ZONE_ID,
                 ChangeBatch=change_batch
             )
-            logger.info(f"[+] {action} record {record_type} {record_name} {record_value} in Route53")
+            logger.info(f"[+] {action} record {record_type} {record_name} {record_value} in Route53. The response is::: {response} -> {change_batch}")
             return response
         except ClientError as e:
             if 'but it was not found' in str(e):
