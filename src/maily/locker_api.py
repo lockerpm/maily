@@ -29,7 +29,7 @@ def get_to_address(relay_address):
             logger.info('[!] Could not get the relay address since requesting to Locker API unsuccessfully')
             time.sleep(10)
             retry += 1
-    logger.error(f'[!] Could not get to_address of #{relay_address} since requesting to Locker API unsuccessfully')
+    # logger.error(f'[!] Could not get to_address of #{relay_address} since requesting to Locker API unsuccessfully')
     return None
 
 
