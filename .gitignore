@@ -1,4 +1,7 @@
 env/
+projectenv/
+locker-maily-venv/
+
 .vscode/
 *.iml
 .idea/
